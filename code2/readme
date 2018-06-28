@@ -1,0 +1,13 @@
+configparser
+numpy
+h5py
+scipy
+
+requirements
+
+
+scikit-image
+
+opencv-python
+
+pid_controller

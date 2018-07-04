@@ -11,7 +11,7 @@ class configDrive:
     self.host = "localhost"#"127.0.0.1"
     self.port = 2000
     self.path = "path/" #"../Desktop/" # If path is set go for it , if not expect a name set
-    self.resolution = [200,88]
+    self.resolution = [800,600]
     self.noise = "None" #NON CARLA SETTINGS PARAM
     self.type_of_driver = "Human"
     self.interface = "Carla"
@@ -19,7 +19,7 @@ class configDrive:
     self.aspect_ratio = [1,1]
     self.middle_camera =0
     self.scale_factor = 1 # NON CARLA SETTINGS PARAM
-    self.image_cut =[115,510] # This is made from top to botton
+    self.image_cut =[0,600] # This is made from top to bottom
     self.autopilot = True
     self.reset_period = 320
     # Figure out a solution for setting specific properties of each interface

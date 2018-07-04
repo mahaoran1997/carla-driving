@@ -74,7 +74,7 @@ def get_camera_dict(ini_file):
     cameras = config['CARLA/SceneCapture']['Cameras']
     camera_dict = {}
     cameras = cameras.split(',')
-    print cameras
+    #print cameras
     for i in range(len(cameras)):
         angle = config['CARLA/SceneCapture/' + cameras[i]]['CameraRotationYaw']
         camera_dict.update({i: (cameras[i], angle)})
@@ -93,7 +93,7 @@ def get_instance(drive_config, drivers_name, memory_use):
 
     camera_dict = get_camera_dict(drive_config.carla_config)
     print " Camera Dict "
-    print camera_dict
+    #print camera_dict
 
     folder_name = str(datetime.datetime.today().year) + str(datetime.datetime.today().month) + str(
         datetime.datetime.today().day)
@@ -103,7 +103,7 @@ def get_instance(drive_config, drivers_name, memory_use):
     folder_name += '_' + str(get_latest_file_number(drive_config.path, folder_name))
     print (drive_config.path)
     print (folder_name)
-    recorder = Recorder(drive_config.path + folder_name + '/', drive_config.resolution, image_cut=drive_config.image_cut, camera_dict=camera_dict, record_waypoints=True)
+    recorder = Recorder(drive_config.path + folder_name + '/', drive_config.resolution, image_cut=drive_config.image_cut, camera_dict=camera_dict, record_waypoints = False)# record_waypoints=True)
 
     return driver, recorder
 
@@ -222,6 +222,7 @@ def drive(drive_config, name=None, memory_use=1.0):
         direction = 2
 
         iteration = 0
+        time_iteration = 0
 
         while direction != -1:
             capture_time = time.time()
@@ -230,7 +231,8 @@ def drive(drive_config, name=None, memory_use=1.0):
             direction = 1
 
             # sensor_data = frame2numpy(image,[800,600])
-            print (sensor_data)
+            #print ("Go")
+            print (iteration)
 
             #recording = driver.get_recording()
 
@@ -241,11 +243,13 @@ def drive(drive_config, name=None, memory_use=1.0):
                 recording = False
 
             #driver.get_reset()
+            # time.time() - _start_time > drive_config.reset_period)
+            if (time_iteration > drive_config.reset_period) \
+                    or (_latest_measurements.player_measurements.collision_vehicles > 0.0 or _latest_measurements.player_measurements.collision_pedestrians > 0.0 or _latest_measurements.player_measurements.collision_other > 0.0):
 
-            if (time.time() - _start_time > drive_config.reset_period) or (_latest_measurements.player_measurements.collision_vehicles > 0.0 \
-                    or _latest_measurements.player_measurements.collision_pedestrians > 0.0 or _latest_measurements.player_measurements.collision_other > 0.0):
+
                 _start_time = time.time()  # ???
-
+                time_iteration = 0
                 # print (self._config_path)
 
                 with open(drive_config.carla_config) as file:
@@ -271,14 +275,14 @@ def drive(drive_config, name=None, memory_use=1.0):
                 continue
 
             speed = measurements.player_measurements.forward_speed
-            print sensor_data
+            #print sensor_data
             rgbs = [x for name, x in sensor_data.items() if isinstance(x, sensor.Image) and x.type == 'SceneFinal']
 
             labels = [x for name, x in sensor_data.items() if
                       isinstance(x, sensor.Image) and x.type == 'SemanticSegmentation']
 
-            print len(rgbs)
-            print len(labels)
+            #print len(rgbs)
+            #print len(labels)
 
             # actions = driver.compute_action(images.rgb[drive_config.middle_camera],measurements.forward_speed,\
             # driver.compute_direction((measurements.transform.location.x,measurements.transform.location.y,22),\
@@ -291,7 +295,7 @@ def drive(drive_config, name=None, memory_use=1.0):
 
             # print actions
             if recording:
-                recorder.record(measurements, sensor_data, actions, action_noisy, direction, driver.get_waypoints())
+                recorder.record(measurements, sensor_data, actions, action_noisy, direction)#, driver.get_waypoints())
 
 
             '''if drive_config.type_of_driver == "Machine" and drive_config.show_screen and drive_config.plot_vbp:
@@ -301,12 +305,28 @@ def drive(drive_config, name=None, memory_use=1.0):
                 screen_manager.plot_camera(image_vbp, [1, 0])'''
 
             iteration += 1
+            time_iteration += 1
             #driver.act(action_noisy)
             client.send_control(action_noisy)
 
 
 
-        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     '''driver.start()
     first_time = True

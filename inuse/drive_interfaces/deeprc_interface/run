@@ -1,0 +1,95 @@
+#Terminal 1
+source /opt/ros/kinetic/setup.bash
+export ROS_HOSTNAME=localhost
+export ROS_MASTER_URI=http://localhost:11311
+roscore
+
+
+#Terminal 2
+source /opt/ros/kinetic/setup.bash
+export ROS_HOSTNAME=localhost
+export ROS_MASTER_URI=http://localhost:11311
+roslaunch mavros px4.launch
+
+#Terminal 3
+xrandr -s 800x600
+#xrandr -s 1920x1080
+ls -ltrh /dev/video*
+sudo rmmod uvcvideo
+sudo modprobe uvcvideo quirks=128
+
+cd /media/nvidia/SSD/GitHub/carla_chauffeur
+
+#Test
+#RC28######################################
+python2 chauffeur.py drive --driver Machine -e mm01_rc28_wpz_M_rgb_cluster -nm "mm01_rc28_wpz_M_rgb_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm11_rc28_wpz_M_mm01_aug_cluster -nm "mm11_rc28_wpz_M_mm01_aug_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm04_rc28_wpz_M_seg_erfnet_cluster -nm "mm04_rc28_wpz_M_seg_erfnet_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm41_rc28_wpz_M_mm04_aug_cluster -nm "mm41_rc28_wpz_M_mm04_aug_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm42_rc28_wpz_M_mm04_rssAll_cluster -nm "mm42_rc28_wpz_M_mm04_rssAll_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm43_rc28_wpz_M_mm04_rssAll_aug_cluster -nm "mm43_rc28_wpz_M_mm04_rssAll_aug_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm44_rc28_wpz_M_mm04_cityscapes_aug_cluster -nm "mm44_rc28_wpz_M_mm04_cityscapes_aug_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm45_rc28_wpz_M_mm41_cityscapes_aug_cluster -nm "mm45_rc28_wpz_M_mm41_cityscapes_aug_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm46_rc28_wpz_M_mm41_rssAll_cluster -nm "mm46_rc28_wpz_M_mm41_rssAll_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm47_rc28_wpz_M_mm41_rssAll_aug_cluster -nm "mm47_rc28_wpz_M_mm41_rssAll_aug_cluster" -dc 3cam_deeprc_drive_config
+
+
+#RC20######################################
+python2 chauffeur.py drive --driver Machine -e mm01_rc20_wpz_M_rgb_cluster -nm "mm01_rc20_wpz_M_rgb_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm11_rc20_wpz_M_mm01_aug_cluster -nm "mm11_rc20_wpz_M_mm01_aug_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm04_rc20_wpz_M_seg_erfnet_cluster -nm "mm04_rc20_wpz_M_seg_erfnet_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm41_rc20_wpz_M_mm04_aug_cluster -nm "mm41_rc20_wpz_M_mm04_aug_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm42_rc20_wpz_M_mm04_rssAll_cluster -nm "mm42_rc20_wpz_M_mm04_rssAll_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm43_rc20_wpz_M_mm04_rssAll_aug_cluster -nm "mm43_rc20_wpz_M_mm04_rssAll_aug_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm44_rc20_wpz_M_mm04_cityscapes_aug_cluster -nm "mm44_rc20_wpz_M_mm04_cityscapes_aug_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm45_rc20_wpz_M_mm41_cityscapes_aug_cluster -nm "mm45_rc20_wpz_M_mm41_cityscapes_aug_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm46_rc20_wpz_M_mm41_rssAll_cluster -nm "mm46_rc20_wpz_M_mm41_rssAll_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm47_rc20_wpz_M_mm41_rssAll_aug_cluster -nm "mm47_rc20_wpz_M_mm41_rssAll_aug_cluster" -dc 3cam_deeprc_drive_config
+
+
+
+
+##Smaller datasets
+
+
+python2 chauffeur.py drive --driver Machine -e mm04_rc6_pz_1h_N_seg_erfnet_cluster -nm "mm04_rc6_pz_1h_N_seg_erfnet_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm04_rc6_pz_1h_seg_erfnet_cluster -nm "mm04_rc6_pz_1h_seg_erfnet_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm04_rc6_pz_2h_seg_erfnet_cluster -nm "mm04_rc6_pz_2h_seg_erfnet_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm04_rc11_wpz_1h_seg_erfnet_cluster -nm "mm04_rc11_wpz_1h_seg_erfnet_cluster" -dc 3cam_deeprc_drive_config
+
+python2 chauffeur.py drive --driver Machine -e mm04_rc11_wpz_2h_seg_erfnet_cluster -nm "mm04_rc11_wpz_2h_seg_erfnet_cluster" -dc 3cam_deeprc_drive_config
+
+
+
+
+#Train
+python2 chauffeur.py drive -db -nm "Indoors" -n "Spike"
+python2 chauffeur.py drive -db -nm "Indoors" -dc 3cam_deeprc_drive_config
+python2 chauffeur.py drive -db -nm "Outdoors" -dc 3cam_deeprc_drive_config
+python2 chauffeur.py drive -db -nm "Outdoors" -n "Spike"
+
+
+#Misc
+rosparam set /mavros/system_id 255
+

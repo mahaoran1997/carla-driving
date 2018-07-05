@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package carla_server;
+
+option cc_enable_arenas = true;
+
+// =============================================================================
+// -- Basic types --------------------------------------------------------------
+// =============================================================================
+
+message Vector3D {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+
+message Transform {
+  Vector3D location = 1;
+  // For now, orientation as the cartesian coordinates X, Y, Z. But we are
+  // probably better off using Roll, Pitch, Yaw in the future as it gives more
+  // info.
+  Vector3D orientation = 2;
+}
+
+message Vehicle {
+  Transform transform = 1;
+  Vector3D box_extent = 2;
+  float forward_speed = 3;
+}
+
+message Pedestrian {
+  Transform transform = 1;
+  Vector3D box_extent = 2;
+  float forward_speed = 3;
+}
+
+message TrafficLight {
+  enum State {
+    GREEN = 0;
+    YELLOW = 1;
+    RED = 2;
+  }
+  Transform transform = 1;
+  State state = 2;
+}
+
+message SpeedLimitSign {
+  Transform transform = 1;
+  float speed_limit = 2;
+}
+
+message Agent {
+  fixed32 id = 1;
+  oneof agent {
+    Vehicle vehicle = 2;
+    Pedestrian pedestrian = 3;
+    TrafficLight traffic_light = 4;
+    SpeedLimitSign speed_limit_sign = 5;
+  }
+}
+
+// =============================================================================
+// -- World Server Messages ----------------------------------------------------
+// =============================================================================
+
+message RequestNewEpisode {
+  string ini_file = 1;
+}
+
+message SceneDescription {
+  repeated Transform player_start_spots = 1;
+}
+
+message EpisodeStart {
+  uint32 player_start_spot_index = 1;
+}
+
+message EpisodeReady {
+  bool ready = 1;
+}
+
+// =============================================================================
+// -- Agent Server Messages ----------------------------------------------------
+// =============================================================================
+
+message Control {
+  float steer = 1;
+  float throttle = 2;
+  float brake = 3;
+  bool hand_brake = 4;
+  bool reverse = 5;
+}
+
+message Measurements {
+  message PlayerMeasurements {
+    Transform transform = 1;
+
+    Vector3D acceleration = 3;
+    float forward_speed = 4;
+
+    float collision_vehicles = 5;
+    float collision_pedestrians = 6;
+    float collision_other = 7;
+
+    float intersection_otherlane = 8;
+    float intersection_offroad = 9;
+
+    Control ai_control = 10;
+  }
+
+  uint32 platform_timestamp = 1;
+
+  uint32 game_timestamp = 2;
+
+  PlayerMeasurements player_measurements = 3;
+
+  repeated Agent non_player_agents = 4;
+}
+

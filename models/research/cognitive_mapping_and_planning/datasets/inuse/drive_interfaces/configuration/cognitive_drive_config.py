@@ -18,14 +18,14 @@ class configDrive:
     self.aspect_ratio = [3,1]
     self.middle_camera =0
     self.scale_factor = 1 # NON CARLA SETTINGS PARAM
-    self.image_cut = [200, 550, 225, 575]#[200,550] # This is made from top to bottom
+    self.image_cut = [100, 450, 225, 575]#[200,550] # This is made from top to bottom
     self.reset_period = 960
     # Figure out a solution for setting specific properties of each interface
     self.city_name  = 'carla_1'
     self.plot_vbp = False
     # Test parameters to be shared between models
 
-    self.timeouts =[200.0] #130
+    self.timeouts =[500.0] #130
     self.weather =1
     #self.cars = 50
     #self.pedestrians =100

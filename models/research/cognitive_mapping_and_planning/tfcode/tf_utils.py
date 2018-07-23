@@ -210,7 +210,10 @@ def get_flow(t, theta, map_size, name_scope='gen_flow'):
     yr = yr + c
     
     flow = tf.stack([xr, yr], axis=-1)
+    #print "t+sh"
+    #print t
     sh = tf.unstack(tf.shape(t), axis=0)
+    #print sh
     sh = tf.stack(sh[:-1]+[tf.constant(_, dtype=tf.int32) for _ in [map_size, map_size, 2]])
     flow = tf.reshape(flow, shape=sh)
     return flow
@@ -381,18 +384,21 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 
     # Initialize the agent.
     init_env_state = e.reset(rng_data)
-
+    print ('finish reset')
+    print (init_env_state)
     
     #init_env_state_c = driver.start()
 
     # Get and process the common data.
     input = e.get_common_data() #finish
     #input = e.pre_common_data(input) #mhr: useless 
+    print ("---------------common_data-----------------")
+    print(input)
     feed_dict  = prepare_feed_dict(m.input_tensors['common'], input)
     if dagger_sample_bn_false:
       feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-    print ("---------------common_data-----------------")
-    print(input)
+    #print ("---------------common_data-----------------")
+    #print(input)
 
 
     #print ('success!')
@@ -419,15 +425,16 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
     net_state = dict(zip(m.train_ops['state_names'], net_state))
 
     print ("---------------net_state-----------------")
-    print(net_state)
+    #print(net_state)
 
 
     net_state_to_input.append(net_state)
     for j in range(num_steps):
+      print ('num_step: {:d}'.format(j))
       f = e.get_features(states[j], j)
       #f = e.pre_features(f)
       print ("----------------------------------f----------------------------------")
-      print(f)
+      #print(f)
       f.update(net_state)
       f['step_number'] = np.ones((1,1,1), dtype=np.int32)*j
       state_features.append(f)
@@ -439,7 +446,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       if dagger_sample_bn_false:
         feed_dict[m.train_ops['batch_norm_is_training_op']] = False
       print ("----------------feed_dict-----------------")
-      print (feed_dict)
+      #print (feed_dict)
       outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
                        m.train_ops['step_data_cache'],
                        m.train_ops['updated_state'],
@@ -460,8 +467,8 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
         e.update_state(outputs, j)
 
       state_targets.append(e.get_targets(states[j], j))
-      print ("----------------state_targets-----------------")
-      print(state_targets[-1])
+      #print ("----------------state_targets-----------------")
+      #print(state_targets[-1])
 
       if j < num_steps-1:
         # Sample from action_probs and optimal action.
@@ -480,8 +487,10 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
         net_state = dict(zip(m.train_ops['state_names'], net_state))
         net_state_to_input.append(net_state)
         print ("----------------net_state_below-----------------")
-        print net_state
+        #print net_state
     
+    
+    #e.sample_env
     # Concatenate things together for training.
     rewards = np.array(rewards).T
     action_sample_wts = np.array(action_sample_wts).T

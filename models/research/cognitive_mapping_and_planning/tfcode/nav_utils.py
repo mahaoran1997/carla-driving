@@ -49,9 +49,9 @@ def compute_losses_multi_or(logits, actions_one_hot, weights=None,
     
     actions_one_hot = tf.cast(tf.reshape(actions_one_hot, [-1, num_actions],
                                          're_actions_one_hot'), tf.float32)
-    weights = tf.reduce_sum(tf.reshape(weights, [-1, num_actions], 're_weight'),
-                            reduction_indices=1)
-    total = tf.reduce_sum(weights)
+    weights = tf.reshape(weights, [-1, num_actions], 're_weight')
+    weights_sum = tf.reduce_sum(weights, reduction_indices=1)
+    total = tf.reduce_sum(weights_sum)
     #weights = weights/total
 
     #action_prob = tf.nn.softmax(logits)
@@ -60,6 +60,10 @@ def compute_losses_multi_or(logits, actions_one_hot, weights=None,
     #example_loss = -tf.log(tf.maximum(tf.constant(1e-4), action_prob))
 
     #data_loss_op = tf.reduce_sum(example_loss * weights) / total
+    print actions_one_hot
+    print logits
+    print weights
+    print total
     data_loss_op = tf.losses.mean_squared_error( actions_one_hot, logits, weights, scope='loss')/total
     if reg_loss_op is None:
       if reg_loss_wt > 0:
@@ -73,7 +77,7 @@ def compute_losses_multi_or(logits, actions_one_hot, weights=None,
       total_loss_op = data_loss_wt*data_loss_op
 
     is_correct = tf.cast(tf.less(tf.reduce_sum(tf.square(actions_one_hot - logits), 1), 0.1, name='pred_class'),  tf.float32) 
-    acc_op = tf.reduce_sum(is_correct*weights) / total
+    acc_op = tf.reduce_sum(is_correct*weights_sum) / total
 
     ewma_acc_op = moving_averages.weighted_moving_average(
         acc_op, ewma_decay, weight=total, name='ewma_acc')

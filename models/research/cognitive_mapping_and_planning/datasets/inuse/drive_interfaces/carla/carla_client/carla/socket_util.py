@@ -21,7 +21,7 @@ def connect(host,port):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		sock.settimeout(100)
 	except socket.error:
-		logginge.exception("Error Creating Socket World")
+		logging.exception("Error Creating Socket World")
 	
 	sock.connect((host,port))
 	logging.debug("connected to %s port %d" %(host,port))

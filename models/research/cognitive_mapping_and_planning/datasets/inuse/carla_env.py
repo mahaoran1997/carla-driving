@@ -44,7 +44,7 @@ import render.swiftshader_renderer as sru
 from render.swiftshader_renderer import SwiftshaderRenderer
 import cv2'''
 
-#TODO: action_noise 并未用rng
+#TODO: action_noise does not use rng
 
 
 from datasets.inuse.drive_interfaces.driver import Driver
@@ -56,7 +56,7 @@ from datasets.inuse.drive_interfaces.carla.carla_client.carla.agent import *
 from datasets.inuse.drive_interfaces.carla.carla_client.carla import Planner
 
 
-
+batch_size = 4
 
 sldist = lambda c1, c2: math.sqrt((c2[0] - c1[0]) ** 2 + (c2[1] - c1[1]) ** 2)
 
@@ -124,52 +124,95 @@ def find_valid_episode_position(positions, waypointer, rng):
 
 class CarlaEnvMultiplexer:
     def __init__(self):
-        self.drive_config = configDrive()
+        #self.drive_config = configDrive()
+        self.drive_configs = []
+        for i in range(batch_size):
+            self.drive_configs.append(configDrive())#, self.drive_config, self.drive_config, self.drive_config]
         # TODO: adding more carla_configs
         prefix = './datasets/inuse/drive_interfaces/carla/'
         self.carla_configs = [prefix + 'CarlaSettings3CamTest.ini']
+        self.carla_env_wrapper = None
         #self.driver = self.get_instance()
 
     def sample_env(self, rngs):
+        #get carla_env_wrapper
         rng = rngs[0]
-        self.drive_configs = [self.drive_config, self.drive_config, self.drive_config, self.drive_config]
-        for i in range(4):
+        for i in range(batch_size):
+            self.drive_configs[i].port = 2000 + i * 3
             self.drive_configs[i].carla_config = rng.choice(self.carla_configs)
-        self.carla_env_wrapper = CarlaEnvWrapper(self.drive_configs)
+        for i in range(batch_size):
+            print (self.drive_configs[i].port)
+        if self.carla_env_wrapper != None:
+            print ("reset_env!!!!!!!!!")
+            self.carla_env_wrapper.reset_config(self.drive_configs)
+        else:
+            self.carla_env_wrapper = CarlaEnvWrapper(self.drive_configs)
         return self.carla_env_wrapper
+    
+    def close(self):
+        self.carla_env_wrapper.close()
 
 
 
 class CarlaEnvWrapper():
 
-    #!!!!!mhr: TODO: reset the environment
-
     def __init__(self, drive_configs):
+        #create_env
+        self.need_reset = False
         self.drive_configs = drive_configs
         self.carla_envs = []
+        self.history = []
         for i in range(len(drive_configs)):
+            print ('Environment {:d}'.format(i))
             self.carla_envs.append(self.create_env(drive_configs[i]))
-        self.history = [[],[],[],[]]
+            self.history.append([])
+        
+    def reset_config(self, drive_configs):
+        self.need_reset = True
+        self.drive_configs = drive_configs
+        self.history = []
+        for i in range(len(drive_configs)):
+            print ('Environment {:d}'.format(i))
+            self.carla_envs[i].reset_config(drive_configs[i])
+            self.history.append([])
+            camera_dict = get_camera_dict(self.drive_configs[i].carla_config)
+            print " Camera Dict "
+            print camera_dict
+
+    def close(self):
+        #self.carla_envs
+        for i in range(len(self.carla_envs)):
+            self.carla_envs[i].close()
 
     def reset(self, rngs):
+        #restart every carla_env
         start_indices = []
         rng = rngs[0]
+        self.history = []
         for i in range(len(self.carla_envs)):
-            start_index = self.carla_envs[i].start(rng)
+            print ('Environment {:d} start'.format(i))
+            if not self.need_reset:
+                start_index = self.carla_envs[i].start(rng)
+            else:
+                print ('reset{:d}'.format(i))
+                start_index = self.carla_envs[i].reset(rng)
             start_indices.append(start_index)
+            self.history.append([])
         return start_indices
 
     def create_env(self, drive_config):
-        
+        #get carla_env but do not start
         driver = CarlaEnv(drive_config)
-        self.camera_dict = get_camera_dict(drive_config.carla_config)
+        camera_dict = get_camera_dict(drive_config.carla_config)
         print " Camera Dict "
-        print self.camera_dict
+        print camera_dict
         # folder_name = str(datetime.datetime.today().year) + str(datetime.datetime.today().month) + str(datetime.datetime.today().day)
         return driver
 
     def get_common_data(self):
-        maps = [[],[],[],[]]
+
+        #mhr:!!!!!!!note that here line and map are references
+        '''maps = [[],[],[],[]]
         line = []
         for i in range(524):
             line.append([0.0])
@@ -177,19 +220,19 @@ class CarlaEnvWrapper():
         for i in range(1112):
             map.append(line)
         for i in range(4):
-            maps[i].append(map)
-
+            maps[i].append(map)'''
+        maps = np.zeros((4,1,1112,524,1))
         rel_goal_locs = []
         goal_locs = []
-        goal_locs.append([])
+        #goal_locs.append([])
         for i in range(len(self.carla_envs)):
             rel_goal_loc, goal_loc = self.carla_envs[i].get_goal_loc_at_start()
             rel_goal_locs.append([rel_goal_loc])
-            goal_locs[0].append([goal_loc])
+            goal_locs.append([goal_loc])
         maps = np.array(maps).astype(np.float32)
         goal_locs = (np.array(goal_locs)).astype(np.float32)
         rel_goal_locs = (np.array(rel_goal_locs)).astype(np.float32)
-        vars(utils.Foo(orig_maps=maps, goal_loc=goal_locs, rel_goal_loc_at_start=rel_goal_locs))
+        return vars(utils.Foo(orig_maps=maps, goal_loc=goal_locs, rel_goal_loc_at_start=rel_goal_locs))
 
     def image_preprocess(self, image):
         if self.drive_configs[0].typ == 'rgb':
@@ -209,6 +252,20 @@ class CarlaEnvWrapper():
             image = np.concatenate((d, isnan), axis=d.ndim-1)
         return image
 
+    def get_features_name(self):
+        f = []
+        f.append('imgs')
+        #f.append('rel_goal_loc')
+        f.append('loc_on_map')
+        f.append('gt_dist_to_goal')
+        for i in range(len(self.drive_configs[0].map_scales)):
+            f.append('ego_goal_imgs_{:d}'.format(i))
+        f.append('incremental_locs')
+        f.append('incremental_thetas')
+        f.append('node_ids')
+        f.append('perturbs')
+        return f
+
     def get_features(self, current_node_ids, step_number):
         '''loc_on_map
             ego_goal_imgs_0,1,2
@@ -227,18 +284,23 @@ class CarlaEnvWrapper():
         outs['ego_goal_imgs_2'] = []
         outs['incremental_thetas'] = []
         outs['imgs'] = []
+        outs['incremental_locs'] = []
 
         #useless inputs
         outs['node_ids'] = []
         outs['gt_dist_to_goal'] = []
+        outs['perturbs'] = []
         
         
         for i in range(len(self.carla_envs)):
-            image, measurements, direction, reach_goal, action_noisy, control = self.carla_envs[i].get_data_for_mapper()
-            self.history[i].append([image, measurements, direction, reach_goal, action_noisy, control])
+            if(step_number == 0):
+                image, measurements, direction, reach_goal, action_noisy, control = self.carla_envs[i].get_data_for_mapper()
+                self.history[i].append((image, measurements, direction, reach_goal, action_noisy, control))
+            else:
+                image, measurements, direction, reach_goal, action_noisy, control = self.history[i][step_number]
             outs['loc_on_map'].append([[measurements['PlayerMeasurements'].transform.location.x, measurements['PlayerMeasurements'].transform.location.y]])
             goal_imgs = self.carla_envs[i].get_ego_goal_img()
-            for i in len(goal_imgs):
+            for i in range(len(goal_imgs)):
                 outs['ego_goal_imgs_{:d}'.format(i)].append(goal_imgs[i])
             current_theta = np.arctan2(measurements['PlayerMeasurements'].transform.orientation.y, measurements['PlayerMeasurements'].transform.orientation.x)
             if (step_number > 0):
@@ -250,10 +312,13 @@ class CarlaEnvWrapper():
             else:
                 translation_theta = current_theta
                 previous_theta = current_theta
-            outs['incremental_thetas'].append([translation_theta - previous_theta, current_theta - translation_theta])
+            outs['incremental_thetas'].append([[translation_theta - previous_theta, current_theta - translation_theta]])
             outs['imgs'].append([[self.image_preprocess(image)]])
-            square = np.square(measurements['PlayerMeasurements'].transform.location.y-self.history[i][step_number-1][1]['PlayerMeasurements'].transform.location.y) +np.square(measurements['PlayerMeasurements'].transform.location.x-self.history[i][step_number-1][1]['PlayerMeasurements'].transform.location.x)
-            length = np.sqrt(square)
+            if step_number > 0:
+                square = np.square(measurements['PlayerMeasurements'].transform.location.y-self.history[i][step_number-1][1]['PlayerMeasurements'].transform.location.y) +np.square(measurements['PlayerMeasurements'].transform.location.x-self.history[i][step_number-1][1]['PlayerMeasurements'].transform.location.x)
+                length = np.sqrt(square)
+            else:
+                length = 0.0
             outs['incremental_locs'].append([[0.0, length]])
 
             #useless inputs
@@ -278,6 +343,10 @@ class CarlaEnvWrapper():
         action = self.get_optimal_action(current_node_ids, step_number)
         action = np.expand_dims(action, axis=1)
         return vars(utils.Foo(action=action))
+    
+    def get_targets_name(self):
+        """Returns the list of names of the targets."""
+        return ['action']
 
     def take_action(self, current_node_ids, action, step_number):
         """In addition to returning the action, also returns the reward that the
@@ -290,7 +359,8 @@ class CarlaEnvWrapper():
 
         for i in range(len(self.carla_envs)):
             self.carla_envs[i].act(action[i])
-            measurements, direction, reach_goal, action_noisy, control = self.carla_envs[i].get_sensor_data()
+            img, measurements, direction, reach_goal, action_noisy, control = self.carla_envs[i].get_data_for_mapper()
+            self.history[i].append((img, measurements, direction, reach_goal, action_noisy, control))
             reward = 0
             if reach_goal:
                 reward = self.drive_configs[i].reward_at_goal
@@ -299,19 +369,8 @@ class CarlaEnvWrapper():
             starting_indices.append(self.carla_envs[i].episode_config[0])
         return starting_indices, rewards
         
-    def get_features_name(self):
-        f = []
-        f.append('imgs')
-        f.append('rel_goal_loc')
-        f.append('loc_on_map')
-        f.append('gt_dist_to_goal')
-        for i in range(len(self.task_params.map_scales)):
-            f.append('ego_goal_imgs_{:d}'.format(i))
-        f.append('incremental_locs')
-        f.append('incremental_thetas')
-        f.append('node_ids')
-        f.append('perturbs')
-        return f
+    
+
 
 class CarlaEnv(Driver):
 
@@ -348,8 +407,37 @@ class CarlaEnv(Driver):
         self._map_scales = driver_conf.map_scales
         self._map_crop_sizes = driver_conf.map_crop_sizes
         self._n_ori = driver_conf.n_ori
+        #self._resolution = driver_conf.resolution
 
-    #def 
+    def  reset_config(self, driver_conf):
+        self._skiped_frames = 20  # ??? TODO: delete it
+        # if driver_conf.use_planner:
+        self.planner = Planner('./datasets/inuse/drive_interfaces/carla/comercial_cars/' + driver_conf.city_name +
+                               '.txt', './datasets/inuse/drive_interfaces/carla/comercial_cars/' + driver_conf.city_name + '.png')
+
+        self._host = driver_conf.host
+        self._port = driver_conf.port
+        self._config_path = driver_conf.carla_config
+        self._resolution = driver_conf.resolution
+        self._image_cut = driver_conf.image_cut
+        #self._autopilot = driver_conf.autopilot
+        self._reset_period = driver_conf.reset_period
+        self._driver_conf = driver_conf
+        self.typ = driver_conf.typ
+        self._rear = False
+        #if self._autopilot:
+        #print driver_conf
+        self._agent = Agent(ConfigAgent(driver_conf.city_name))
+        self.noiser = Noiser(driver_conf.noise)
+        #self._map_scales = driver_conf.map_scales
+        self._map_crop_sizes = driver_conf.map_crop_sizes
+        self._n_ori = driver_conf.n_ori
+        #self._resolution = driver_conf.resolution
+
+
+    def close(self):
+        self.carla.stop()
+        print('stop finish')
 
 
     def start(self, rng):
@@ -358,7 +446,12 @@ class CarlaEnv(Driver):
         self._reset(rng)
         return self.episode_config[0]
 
+    def reset(self, rng):
 
+        #self.carla = CARLA(self._host, self._port)
+        self._reset(rng)
+        return self.episode_config[0]
+    
 
 
     def get_rel_goal_loc(self, current_pos, goal_pos):
@@ -379,7 +472,7 @@ class CarlaEnv(Driver):
         rel_goal_loc.append((current_pos.orientation.x*dx+current_pos.orientation.y*dy)/orientation_vec_length)
         rel_goal_loc.append(current_pos.orientation.x*goal_pos.orientation.x/(orientation_vec_length*goal_orientation_vec_length)+current_pos.orientation.y*goal_pos.orientation.y/(orientation_vec_length*goal_orientation_vec_length))
         rel_goal_loc.append(goal_pos.orientation.y*current_pos.orientation.x/(orientation_vec_length*goal_orientation_vec_length)-goal_pos.orientation.x*current_pos.orientation.y/(orientation_vec_length*goal_orientation_vec_length))
-        return self.rel_goal_loc_at_start
+        return rel_goal_loc
 
     def get_goal_loc_at_start(self):
         self.start_pos = self.positions[self.episode_config[0]]
@@ -436,6 +529,7 @@ class CarlaEnv(Driver):
 
 
     def _reset(self, rng):
+        print('reset')
         self._start_time = time.time()
         self.positions = self.carla.loadConfigurationFile(self._config_path)
         self.episode_config = find_valid_episode_position(
@@ -505,12 +599,12 @@ class CarlaEnv(Driver):
         if self.typ == 'rgb':
             image = measurements['BGRA'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
             image = image[:, :, ::-1]
-            image = scipy.misc.imresize(image, [self._driver_conf._resolution[0], self._driver_conf._resolution[1]])
+            image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
             Image.fromarray(image).save("datasets/inuse/cog/img_" + str((capture_time)) + ".png")
             #image_input = image *1. - 128
         elif self.typ == 'd':
             image = measurements['Depth'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
-            image = scipy.misc.imresize(image, [self._driver_conf._resolution[0], self._driver_conf._resolution[1]])
+            image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
             Image.fromarray(image).save("datasets/inuse/cog/dep_" + str((capture_time)) + ".png")
             #image_input = np.array(image)
         else:
@@ -520,10 +614,12 @@ class CarlaEnv(Driver):
 
     def act(self, action):
         control = Control()
+        print(action)
         control.steer = action[0]
         control.throttle = action[1]
         control.brake = action[2]
-        self.carla.sendCommand(action)
+        #print(control.throttle)
+        self.carla.sendCommand(control)
 	
         '''self.rel_goal_loc_at_start = []
         dy = self.goal_pos.location.y - self.start_pos.location.y

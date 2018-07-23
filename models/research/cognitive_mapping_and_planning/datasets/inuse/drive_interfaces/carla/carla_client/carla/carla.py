@@ -38,7 +38,9 @@ class CARLA(object):
 		self._image_x =0
 		self._image_y = 0
 
-
+		print ('connect')
+		print (self._host)
+		print (self._port)#, host, port
 		self._socket_world = socket_util.pers_connect(self._host ,self._port)
 		logging.debug("Connected to Unreal Server World Socket")
 		self._socket_stream = 0
@@ -60,7 +62,7 @@ class CARLA(object):
 	Args:
 		None
 	Returns:
-	    None
+		None
 
 	"""
 
@@ -247,7 +249,8 @@ class CARLA(object):
 	"""
 
 	def sendCommand(self,control):
-
+		
+		#print (control.throttle,control.steer,control.brake,control.hand_brake,control.reverse)
 		logging.debug("Send Control Comand : throttle -> %f , steer %f, brake %f, hand_brake %d, gear %d" % (control.throttle,control.steer,control.brake,control.hand_brake,control.reverse))
 		try:
 			socket_util.send_message(self._socket_control,control)

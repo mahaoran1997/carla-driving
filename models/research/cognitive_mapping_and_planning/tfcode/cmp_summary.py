@@ -193,8 +193,8 @@ def _add_summaries(m, args, summary_mode, arop_full_summary_iters):
   with tf.name_scope(scope_name):
     s_ops = nu.add_default_summaries(summary_mode, arop_full_summary_iters,
                                      summarize_ops, summarize_names,
-                                     to_aggregate, m.action_prob_op,
-                                     m.input_tensors, scope_name=scope_name)
+                                     to_aggregate, m.action_logits_op,
+                                     m.input_tensors, scope_name=scope_name)#m.action_prob_op,
     if summary_mode == 'val':
       arop, arop_summary_iters, arop_eval_fns = _summary_vis(
           m, task_params.batch_size, task_params.num_steps,

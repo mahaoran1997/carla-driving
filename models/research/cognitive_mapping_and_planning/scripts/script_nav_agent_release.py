@@ -64,6 +64,30 @@ from tfcode import vision_baseline_lstm
 from datasets.inuse.carla_env import *
 #from datasets.inuse.carla_env import *
 
+'''
+obj        = train_step_kwargs['obj']  
+e = obj.sample_env(rng_data)
+print ('got instance of driver')
+init_env_state = e.reset(rng_data)
+input = e.get_common_data() #finish
+#input = e.pre_common_data(input) #mhr: useless 
+print ("---------------common_data-----------------")    
+#print(input)
+
+states = []
+states.append(init_env_state)
+f = e.get_features(states[0], 0)
+print ("----------------------------------f----------------------------------")
+#print(f)
+optimal_action = e.get_optimal_action(states[0], 0)
+print('----optimal-----')
+print (optimal_action)
+next_state, reward = e.take_action(states[0], optimal_action, 0)
+states.append(next_state)
+f = e.get_features(states[1], 1)
+print ("----------------------------------f----------------------------------")
+#print(f)'''
+
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('master', '',
@@ -128,14 +152,16 @@ def _setup_args(config_name, logdir):
 
 def _train(args):
 
-  #obj_c = CarlaEnvWrapper()
+
+  
   #driver = obj_c.get_instance()
   container_name = ""
 
   #R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
   R = lambda: CarlaEnvMultiplexer()
-  #mhr: obj is the environment R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
 
+  
+  
   m = utils.Foo()
   m.tf_graph = tf.Graph()
 
@@ -155,6 +181,10 @@ def _train(args):
             num_steps=args.navtask.task_params.num_steps*args.navtask.task_params.num_goals, iters=1,
             train_display_interval=args.summary.display_interval,
             dagger_sample_bn_false=args.arch.dagger_sample_bn_false)
+
+        
+
+
         print ("------------------------train_step_kwargs-----------------")
         print (train_step_kwargs)
         delay_start = (args.solver.task*(args.solver.task+1))/2 * FLAGS.delay_start_iters
@@ -163,7 +193,7 @@ def _train(args):
 
         additional_args = {}
 
-
+        
         print ('-----------------start training------------------')
         final_loss = slim.learning.train(
             train_op=m.train_op,
@@ -266,3 +296,31 @@ if __name__ == '__main__':
 args = config_vision_baseline.get_args_for_config(config_name)
 args.setup_to_run = vision_baseline_lstm.setup_to_run
 args.setup_train_step_kwargs = vision_baseline_lstm.setup_train_step_kwargs'''
+
+
+'''
+#mhr: obj is the environment R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
+
+  rng_data = [np.random.RandomState(0), np.random.RandomState(0)]
+
+  train_step_kwargs={}
+  train_step_kwargs['obj'] = R()  
+  obj        = train_step_kwargs['obj']  
+  e = obj.sample_env(rng_data)
+  print ('got instance of driver')
+  init_env_state = e.reset(rng_data)
+  input = e.get_common_data() #finish
+  states = []
+  states.append(init_env_state)
+  f = e.get_features(states[0], 0)
+  optimal_action = e.get_optimal_action(states[0], 0)
+  print('----optimal-----')
+  print (optimal_action)
+  next_state, reward = e.take_action(states[0], optimal_action, 0)
+  states.append(next_state)
+  #e.close()
+  obj        = train_step_kwargs['obj']  
+  e = obj.sample_env(rng_data)
+  print ('got instance of driver')
+  init_env_state = e.reset(rng_data)
+  input = e.get_common_data() #finish'''

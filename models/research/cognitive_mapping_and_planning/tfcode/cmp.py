@@ -159,18 +159,24 @@ def running_combine(fss_logits, confs_probs, incremental_locs,
     confs_probs_ = tf.unstack(confs_probs, axis=1, num=num_steps)
     incremental_locs_ = tf.unstack(incremental_locs, axis=1, num=num_steps)
     incremental_thetas_ = tf.unstack(incremental_thetas, axis=1, num=num_steps)
+    incremental_thetas_2 = tf.transpose(incremental_thetas_, perm=[0, 2, 1])
     running_sum_num = tf.unstack(previous_sum_num, axis=1, num=1)[0]
     running_sum_denom = tf.unstack(previous_sum_denom, axis=1, num=1)[0]
     running_max_denom = tf.unstack(previous_max_denom, axis=1, num=1)[0]
+    #print(num_steps)
 
     for i in range(num_steps):
       # Rotate the previous running_num and running_denom
+      inc_theta_0 = tf.reshape(incremental_thetas_2[i][0], shape = [-1, 1])
+      inc_theta_1 = tf.reshape(incremental_thetas_2[i][1], shape = [-1, 1])
+      #print incremental_locs_[i]
+      #print inc_theta_0
       running_sum_num, running_sum_denom, running_max_denom = rotate_preds(
-          incremental_locs_[i], [incremental_thetas_[i][0]], map_size,
+          incremental_locs_[i], inc_theta_0, map_size,
           [running_sum_num, running_sum_denom, running_max_denom],
           output_valid_mask=False)[0]
       running_sum_num, running_sum_denom, running_max_denom = rotate_preds(
-          (np.array([0.0, 0.0]).astype(np.float32)), [incremental_thetas_[i][0]], map_size,
+          tf.constant(0.0, shape=[incremental_locs_[i].shape[0], 2]), inc_theta_1, map_size,
           [running_sum_num, running_sum_denom, running_max_denom],
           output_valid_mask=False)[0]
       # print i, num_steps, running_sum_num.get_shape().as_list()

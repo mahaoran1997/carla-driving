@@ -62,6 +62,61 @@ def find_valid_episode_position(positions,waypointer):
     return index_start,index_goal
 
 
+'''
+while(True):
+        found_match = False
+
+        while not found_match:
+
+            #for i in range(len(positions)):
+            #    print ('id {:d}:'.format(i))
+            #    print (positions[i].location.x,  positions[i].location.y )
+
+            index_start = np.random.randint(len(positions))
+            start_pos =positions[index_start]
+            if not waypointer.test_position((start_pos.location.x,start_pos.location.y,22),\
+                (start_pos.orientation.x,start_pos.orientation.y,start_pos.orientation.z)):
+                continue
+
+            index_goals = []
+            for i in range(len(positions)):
+                goals_pos =positions[i]  
+                if i!=start_pos and sldist([start_pos.location.x,start_pos.location.y],[goals_pos.location.x,goals_pos.location.y])<= 10000.0:
+                    index_goals.append(i)
+
+            index_goal = index_goals[np.random.randint(len(index_goals))]
+
+            goals_pos =positions[index_goal]  
+            print (' TESTING (',index_start,',',index_goal,')')
+            
+            if not waypointer.test_position((goals_pos.location.x,goals_pos.location.y,22),\
+                (goals_pos.orientation.x,goals_pos.orientation.y,goals_pos.orientation.z)):
+                print ('position')
+                continue
+            #if sldist([start_pos.location.x,start_pos.location.y],[goals_pos.location.x,goals_pos.location.y]) < 25000.0:
+            #    print ('COntinued on distance ', sldist([start_pos.location.x,start_pos.location.y],[goals_pos.location.x,goals_pos.location.y]))
+                
+            #    continue
+
+            if waypointer.test_pair((start_pos.location.x,start_pos.location.y,22)\
+                ,(start_pos.orientation.x,start_pos.orientation.y,start_pos.orientation.z),\
+                (goals_pos.location.x,goals_pos.location.y,22)):
+                found_match=True
+            else:
+                print ('pair')
+
+            if (found_match):
+                print ([start_pos.location.x,start_pos.location.y, goals_pos.location.x,goals_pos.location.y])
+                print (sldist([start_pos.location.x,start_pos.location.y],[goals_pos.location.x,goals_pos.location.y]))
+            
+            waypointer.reset()
+        waypointer.reset()
+
+    
+    return index_start,index_goal
+
+'''
+
 class CarlaHuman(Driver):
 
 

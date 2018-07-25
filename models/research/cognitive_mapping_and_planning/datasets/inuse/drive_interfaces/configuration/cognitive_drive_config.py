@@ -27,12 +27,19 @@ class configDrive:
 
     self.timeouts =[500.0] #130
     self.weather =1
-    #self.cars = 50
-    #self.pedestrians =100
+    self.cars = 0  #50
+    self.pedestrians = 0 #500
     self.typ = 'rgb'
-    self.map_scales = [0.03125, 0.0625, 0.125]
+    self.map_scales = [0.00125, 0.0025, 0.005] #[0.03125, 0.0625, 0.125]
     self.map_crop_sizes = [16, 16, 16]
     self.n_ori = 4
 
     self.reward_at_goal = 1.0
-    self.reward_time_penalty = 0.1 
+    self.reward_time_penalty = 0.1
+    
+    self.difficulty = 10000
+
+    self.stop4TL = False
+
+    self.dist_to_activate = 300
+    self.skiped_frames = 8

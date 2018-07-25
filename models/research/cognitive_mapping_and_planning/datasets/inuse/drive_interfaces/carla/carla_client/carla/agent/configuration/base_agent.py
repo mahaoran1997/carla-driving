@@ -6,7 +6,7 @@ class ConfigAgent:
 
 	# GENERAL THINGS
 
-	def __init__(self,city_name):
+	def __init__(self, city_name, stop4TL):
 		# WAYPOINT ----- TRAJECTORY CONFIGURATION
 
 		dir_path = os.path.dirname(__file__)
@@ -45,7 +45,7 @@ class ConfigAgent:
 		self.wp_num_speed = 0.5 #Select WP - Reverse Order: 1 - closest, 0 - furthest
 
 		#Stop for traffic lights
-		self.stop4TL = True #False
+		self.stop4TL = stop4TL #False
 		#Stop for pedestrians
 		self.stop4P = True
 		#Stop for vehicles

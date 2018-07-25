@@ -393,7 +393,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
     input = e.get_common_data() #finish
     #input = e.pre_common_data(input) #mhr: useless 
     print ("---------------common_data-----------------")
-    print(input)
+    #print(input)
     feed_dict  = prepare_feed_dict(m.input_tensors['common'], input)
     if dagger_sample_bn_false:
       feed_dict[m.train_ops['batch_norm_is_training_op']] = False
@@ -457,7 +457,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       net_state = outs[3]
 
       print ("----------------outs-----------------")
-      print (outs)
+      # print (outs)
       # outs
 
       #mhr:useless?

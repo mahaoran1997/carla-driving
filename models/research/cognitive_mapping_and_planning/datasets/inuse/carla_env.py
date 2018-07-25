@@ -89,7 +89,7 @@ def get_camera_dict(ini_file):
     return camera_dict
 
 
-def find_valid_episode_position(positions, waypointer, rng):
+def find_valid_episode_position(positions, waypointer, rng, difficulty):
     found_match = False
     while not found_match:
         index_start = rng.choice(range(len(positions))) #np.random.randint(len(positions))
@@ -97,20 +97,29 @@ def find_valid_episode_position(positions, waypointer, rng):
         if not waypointer.test_position((start_pos.location.x, start_pos.location.y, 22),
                                         (start_pos.orientation.x, start_pos.orientation.y, start_pos.orientation.z)):
             continue
-        index_goal = rng.choice(range(len(positions))) #np.random.randint(len(positions))
-        if index_goal == index_start:
-            continue
+
+        index_goals = []
+        for i in range(len(positions)):
+            tmp_pos =positions[i]  
+            if i!=start_pos and sldist([start_pos.location.x,start_pos.location.y],[tmp_pos.location.x,tmp_pos.location.y])<= difficulty:
+                index_goals.append(i)
+
+        index_goal = index_goals[rng.choice(range(len(index_goals)))]
+        
+        #index_goal = rng.choice(range(len(positions))) #np.random.randint(len(positions))
+        #if index_goal == index_start:
+        #    continue
 
         print (' TESTING (', index_start, ',', index_goal, ')')
         goals_pos = positions[index_goal]
         if not waypointer.test_position((goals_pos.location.x, goals_pos.location.y, 22),
                                         (goals_pos.orientation.x, goals_pos.orientation.y, goals_pos.orientation.z)):
             continue
-        if sldist([start_pos.location.x, start_pos.location.y], [goals_pos.location.x, goals_pos.location.y]) < 25000.0:
-            print ('COntinued on distance ', sldist([start_pos.location.x, start_pos.location.y], [
-                goals_pos.location.x, goals_pos.location.y]))
+        #if sldist([start_pos.location.x, start_pos.location.y], [goals_pos.location.x, goals_pos.location.y]) < 25000.0:
+        #    print ('COntinued on distance ', sldist([start_pos.location.x, start_pos.location.y], [
+        #        goals_pos.location.x, goals_pos.location.y]))
 
-            continue
+        #    continue
 
         if waypointer.test_pair((start_pos.location.x, start_pos.location.y, 22),
                                 (start_pos.orientation.x, start_pos.orientation.y, start_pos.orientation.z),
@@ -164,7 +173,7 @@ class CarlaEnvWrapper():
         self.history = []
         for i in range(len(drive_configs)):
             print ('Environment {:d}'.format(i))
-            self.carla_envs.append(self.create_env(drive_configs[i]))
+            self.carla_envs.append(self.create_env(drive_configs[i], i))
             self.history.append([])
         
     def reset_config(self, drive_configs):
@@ -200,9 +209,9 @@ class CarlaEnvWrapper():
             self.history.append([])
         return start_indices
 
-    def create_env(self, drive_config):
+    def create_env(self, drive_config, env_id):
         #get carla_env but do not start
-        driver = CarlaEnv(drive_config)
+        driver = CarlaEnv(drive_config, env_id)
         camera_dict = get_camera_dict(drive_config.carla_config)
         print " Camera Dict "
         print camera_dict
@@ -294,6 +303,7 @@ class CarlaEnvWrapper():
         
         for i in range(len(self.carla_envs)):
             if(step_number == 0):
+                self.carla_envs[i].skip_frames()
                 image, measurements, direction, reach_goal, action_noisy, control = self.carla_envs[i].get_data_for_mapper()
                 self.history[i].append((image, measurements, direction, reach_goal, action_noisy, control))
             else:
@@ -359,6 +369,8 @@ class CarlaEnvWrapper():
 
         for i in range(len(self.carla_envs)):
             self.carla_envs[i].act(action[i])
+        
+        for i in range(len(self.carla_envs)):
             img, measurements, direction, reach_goal, action_noisy, control = self.carla_envs[i].get_data_for_mapper()
             self.history[i].append((img, measurements, direction, reach_goal, action_noisy, control))
             reward = 0
@@ -374,20 +386,23 @@ class CarlaEnvWrapper():
 
 class CarlaEnv(Driver):
 
-    def __init__(self, driver_conf):
+    def __init__(self, driver_conf, env_id):
         Driver.__init__(self)
+        self.reset_config(driver_conf)
+        self.id = env_id
         # self._straight_button = False
         # self._left_button = False
         # self._right_button = False
         # self._recording= False
 
-        self._skiped_frames = 20  # ??? TODO: delete it
+        #self._skiped_frames = 20  # ??? TODO: delete it
 
         # load a manager to deal with test data
         # self.use_planner = driver_conf.use_planner
 
         # if driver_conf.use_planner:
-        self.planner = Planner('./datasets/inuse/drive_interfaces/carla/comercial_cars/' + driver_conf.city_name +
+        
+        '''self.planner = Planner('./datasets/inuse/drive_interfaces/carla/comercial_cars/' + driver_conf.city_name +
                                '.txt', './datasets/inuse/drive_interfaces/carla/comercial_cars/' + driver_conf.city_name + '.png')
 
         self._host = driver_conf.host
@@ -402,15 +417,20 @@ class CarlaEnv(Driver):
         self._rear = False
         #if self._autopilot:
         #print driver_conf
-        self._agent = Agent(ConfigAgent(driver_conf.city_name))
+        self._agent = Agent(ConfigAgent(driver_conf.city_name, driver_conf.stop4TL))
         self.noiser = Noiser(driver_conf.noise)
         self._map_scales = driver_conf.map_scales
         self._map_crop_sizes = driver_conf.map_crop_sizes
         self._n_ori = driver_conf.n_ori
+        self._stop4TL = driver_conf.stop4TL
+        self._difficulty = driver_conf.difficulty
         #self._resolution = driver_conf.resolution
+        self._dist_to_activate = driver_conf.dist_to_activate # TODO:?
+        # Set 10 frames to skip
+        self._skiped_frames = driver_conf.skiped_frames  # TODO:?'''
 
     def  reset_config(self, driver_conf):
-        self._skiped_frames = 20  # ??? TODO: delete it
+        #self._skiped_frames = 20  # ??? TODO: delete it
         # if driver_conf.use_planner:
         self.planner = Planner('./datasets/inuse/drive_interfaces/carla/comercial_cars/' + driver_conf.city_name +
                                '.txt', './datasets/inuse/drive_interfaces/carla/comercial_cars/' + driver_conf.city_name + '.png')
@@ -427,12 +447,17 @@ class CarlaEnv(Driver):
         self._rear = False
         #if self._autopilot:
         #print driver_conf
-        self._agent = Agent(ConfigAgent(driver_conf.city_name))
+        self._agent = Agent(ConfigAgent(driver_conf.city_name, driver_conf.stop4TL))
         self.noiser = Noiser(driver_conf.noise)
-        #self._map_scales = driver_conf.map_scales
+        self._map_scales = driver_conf.map_scales
         self._map_crop_sizes = driver_conf.map_crop_sizes
         self._n_ori = driver_conf.n_ori
+        self._stop4TL = driver_conf.stop4TL
+        self._difficulty = driver_conf.difficulty
         #self._resolution = driver_conf.resolution
+        self._dist_to_activate = driver_conf.dist_to_activate # TODO:?
+        # Set 10 frames to skip
+        self._skiped_frames = driver_conf.skiped_frames  # TODO:?
 
 
     def close(self):
@@ -533,16 +558,22 @@ class CarlaEnv(Driver):
         self._start_time = time.time()
         self.positions = self.carla.loadConfigurationFile(self._config_path)
         self.episode_config = find_valid_episode_position(
-            self.positions, self._agent.waypointer, rng)
-        self._agent = Agent(ConfigAgent(self._driver_conf.city_name))
+            self.positions, self._agent.waypointer, rng, self._difficulty)
+        self._agent = Agent(ConfigAgent(self._driver_conf.city_name, self._driver_conf.stop4TL))
 
         self.carla.newEpisode(self.episode_config[0])
 
         print 'RESET ON POSITION ', self.episode_config[0]
-        self._dist_to_activate = 300  # TODO:?
-        # Set 10 frames to skip
-        self._skiped_frames = 10  # TODO:?
+        
         return self.episode_config
+    
+    def skip_frames(self):
+        print ('skip')
+        for i in range(len(self._skiped_frames)):
+            measurements = self.carla.getMeasurements()
+            self.act([0.0, 0.0, 0.0])
+
+
 
     '''def get_recording(self):
         #if self._autopilot:
@@ -600,12 +631,12 @@ class CarlaEnv(Driver):
             image = measurements['BGRA'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
             image = image[:, :, ::-1]
             image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
-            Image.fromarray(image).save("datasets/inuse/cog/img_" + str((capture_time)) + ".png")
+            Image.fromarray(image).save("datasets/inuse/cog/img_"+str((self.id)) +"_" + str((capture_time)) + ".png")
             #image_input = image *1. - 128
         elif self.typ == 'd':
             image = measurements['Depth'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
             image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
-            Image.fromarray(image).save("datasets/inuse/cog/dep_" + str((capture_time)) + ".png")
+            Image.fromarray(image).save("datasets/inuse/cog/dep_" +str((self.id)) +"_" + str((capture_time)) + ".png")
             #image_input = np.array(image)
         else:
             logging.fatal('Sampling not one of uniform.')

@@ -64,29 +64,61 @@ from tfcode import vision_baseline_lstm
 from datasets.inuse.carla_env import *
 #from datasets.inuse.carla_env import *
 
-'''
-obj        = train_step_kwargs['obj']  
-e = obj.sample_env(rng_data)
-print ('got instance of driver')
-init_env_state = e.reset(rng_data)
-input = e.get_common_data() #finish
-#input = e.pre_common_data(input) #mhr: useless 
-print ("---------------common_data-----------------")    
-#print(input)
 
-states = []
-states.append(init_env_state)
-f = e.get_features(states[0], 0)
-print ("----------------------------------f----------------------------------")
-#print(f)
-optimal_action = e.get_optimal_action(states[0], 0)
-print('----optimal-----')
-print (optimal_action)
-next_state, reward = e.take_action(states[0], optimal_action, 0)
-states.append(next_state)
-f = e.get_features(states[1], 1)
-print ("----------------------------------f----------------------------------")
-#print(f)'''
+
+
+
+'''
+iter = 0
+rng_data = [np.random.RandomState(0), np.random.RandomState(0)]
+train_step_kwargs={}
+R = lambda: CarlaEnvMultiplexer()
+train_step_kwargs['obj'] = R()  
+while True:
+  iter += 1
+  print ('iter{:d}'.format(iter))
+  obj        = train_step_kwargs['obj']  
+  e = obj.sample_env(rng_data)
+  print ('got instance of driver')
+  init_env_state = e.reset(rng_data)
+  input = e.get_common_data() #finish
+  #input = e.pre_common_data(input) #mhr: useless 
+  print ("---------------common_data-----------------")    
+  #print(input)
+
+  states = []
+  states.append(init_env_state)
+  for i in range(80):
+    f = e.get_features(states[i], i)
+    optimal_action = e.get_optimal_action(states[i], i)
+    print('----optimal-----')
+    print (optimal_action)
+    next_state, reward = e.take_action(states[i], optimal_action, i)
+    states.append(next_state)
+'''
+
+
+''' 
+  obj        = train_step_kwargs['obj']  
+  e = obj.sample_env(rng_data)
+  print ('got instance of driver')
+  init_env_state = e.reset(rng_data)
+  input = e.get_common_data() #finish
+  states = []
+  states.append(init_env_state)
+  f = e.get_features(states[0], 0)
+  optimal_action = e.get_optimal_action(states[0], 0)
+  print('----optimal-----')
+  print (optimal_action)
+  next_state, reward = e.take_action(states[0], optimal_action, 0)
+  states.append(next_state)
+  #e.close()
+  obj        = train_step_kwargs['obj']  
+  e = obj.sample_env(rng_data)
+  print ('got instance of driver')
+  init_env_state = e.reset(rng_data)
+  input = e.get_common_data() #finish
+'''
 
 FLAGS = flags.FLAGS
 
@@ -211,6 +243,10 @@ def _train(args):
             startup_delay_steps=delay_start,
             summary_op=None, session_config=config, **additional_args)
 
+
+
+
+
 def _test(args):
   args.solver.master = ''
   container_name = ""
@@ -224,7 +260,17 @@ def _test(args):
   m.tf_graph = tf.Graph()
 
   rng_data_seed = 0; rng_action_seed = 0
-  R = lambda: nav_env.get_multiplexer_class(args.navtask, rng_data_seed)
+
+
+
+  #R = lambda: nav_env.get_multiplexer_class(args.navtask, rng_data_seed)
+  
+  R = lambda: CarlaEnvMultiplexer()
+
+
+
+
+
   with m.tf_graph.as_default():
     with tf.container(container_name):
       m = args.setup_to_run(
@@ -260,8 +306,7 @@ def _test(args):
                      time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()),
                      last_checkpoint)
 
-        if (args.control.only_eval_when_done == False or 
-            checkpoint_iter >= args.solver.max_steps):
+        if (True): #(args.control.only_eval_when_done == False or checkpoint_iter >= args.solver.max_steps):
           start = time.time()
           logging.info('Starting evaluation at %s using checkpoint %s.', 
                        time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()),
@@ -287,6 +332,8 @@ def _test(args):
             if should_stop:
               break
 
+  
+
 if __name__ == '__main__':
   app.run()
 
@@ -301,26 +348,4 @@ args.setup_train_step_kwargs = vision_baseline_lstm.setup_train_step_kwargs'''
 '''
 #mhr: obj is the environment R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
 
-  rng_data = [np.random.RandomState(0), np.random.RandomState(0)]
-
-  train_step_kwargs={}
-  train_step_kwargs['obj'] = R()  
-  obj        = train_step_kwargs['obj']  
-  e = obj.sample_env(rng_data)
-  print ('got instance of driver')
-  init_env_state = e.reset(rng_data)
-  input = e.get_common_data() #finish
-  states = []
-  states.append(init_env_state)
-  f = e.get_features(states[0], 0)
-  optimal_action = e.get_optimal_action(states[0], 0)
-  print('----optimal-----')
-  print (optimal_action)
-  next_state, reward = e.take_action(states[0], optimal_action, 0)
-  states.append(next_state)
-  #e.close()
-  obj        = train_step_kwargs['obj']  
-  e = obj.sample_env(rng_data)
-  print ('got instance of driver')
-  init_env_state = e.reset(rng_data)
-  input = e.get_common_data() #finish'''
+  '''

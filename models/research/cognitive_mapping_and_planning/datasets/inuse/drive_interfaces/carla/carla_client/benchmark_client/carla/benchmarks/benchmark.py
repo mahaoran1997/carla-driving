@@ -147,7 +147,7 @@ class Benchmark(object):
                 float(distance), curr_x, curr_y, target.location.x,
                  target.location.y)
 
-            if distance < 200.0:
+            if distance < 400.0:
                 success = True
 
             frame += 1

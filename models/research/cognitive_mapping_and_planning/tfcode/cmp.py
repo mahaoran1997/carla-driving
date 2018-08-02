@@ -211,20 +211,29 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
   # Reshape into nice things so that these can be accumulated over time steps
   # for faster backprop.
   sh_before = x.get_shape().as_list()
+  print('------------------------------------------')
+  print(sh_before)
   out.encoder_output = tf.reshape(x, shape=[task_params.batch_size, -1, n_views] + sh_before[1:])
+  print(out.encoder_output.get_shape().as_list())
+  
   x = tf.reshape(out.encoder_output, shape=[-1] + sh_before[1:])
+  print(x.get_shape().as_list())
 
   # Add a layer to reduce dimensions for a fc layer.
   if mapper_arch.dim_reduce_neurons > 0:
-    ks = 1; neurons = mapper_arch.dim_reduce_neurons;
+    ks = 1
+    neurons = mapper_arch.dim_reduce_neurons
     init_var = np.sqrt(2.0/(ks**2)/neurons)
     batch_norm_param = mapper_arch.batch_norm_param
     batch_norm_param['is_training'] = batch_norm_is_training_op
+    print('adfasdf')
+    print(x.get_shape().as_list())
     out.conv_feat = slim.conv2d(x, neurons, kernel_size=ks, stride=1,
                     normalizer_fn=slim.batch_norm, normalizer_params=batch_norm_param,
                     padding='SAME', scope='dim_reduce',
                     weights_regularizer=slim.l2_regularizer(wt_decay),
                     weights_initializer=tf.random_normal_initializer(stddev=init_var))
+    #print(out.conv_feat.get_shape().as_list())
     reshape_conv_feat = slim.flatten(out.conv_feat)
     sh = reshape_conv_feat.get_shape().as_list()
     out.reshape_conv_feat = tf.reshape(reshape_conv_feat, shape=[-1, sh[1]*n_views])
@@ -259,7 +268,7 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
   sh = x.get_shape().as_list()
   x = tf.reshape(x, shape=[task_params.batch_size, -1] + sh[1:])
   out.deconv_output = x
-
+  #print(x.get_shape().as_list())
   # Separate out the map and the confidence predictions, pass the confidence
   # through a sigmoid.
   if split_maps:
@@ -467,7 +476,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   m.train_ops['state_names'] = state_names
   m.train_ops['updated_state'] = updated_state
   m.train_ops['init_state'] = [init_state for _ in updated_state]
-
+  
   m.train_ops['step'] = m.action_logits_op #mhr:!!!!!!! m.action_prob_op
   m.train_ops['common'] = [m.input_tensors['common']['orig_maps'],
                            m.input_tensors['common']['goal_loc']]
@@ -506,8 +515,8 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
     compute_losses_multi_or(m.action_logits_op,
                             m.input_tensors['train']['action'], weights=weight,
                             num_actions=task_params.num_actions,
-                            data_loss_wt=args.solver.data_loss_wt,
-                            reg_loss_wt=args.solver.reg_loss_wt,
+                            data_loss_wt=10 ,#args.solver.data_loss_wt,
+                            reg_loss_wt= 0.05,#args.solver.reg_loss_wt,
                             ewma_decay=ewma_decay)
   
   if args.arch.readout_maps:

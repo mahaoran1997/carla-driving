@@ -42,4 +42,5 @@ class configDrive:
     self.stop4TL = False
 
     self.dist_to_activate = 300
-    self.skiped_frames = 8
+    self.skiped_frames = 32
+    self.replay_action = 1

@@ -449,7 +449,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
                        m.train_ops['step_data_cache'],
                        m.train_ops['updated_state'],
-                       m.train_ops['outputs'], m.ego_map_ops, m.coverage_ops], feed_dict=feed_dict)
+                       m.train_ops['outputs']], feed_dict=feed_dict)
       action_probs = outs[0]
       sample_gt_prob = outs[1]
       step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
@@ -457,8 +457,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 
       print ("----------------outs-----------------")
       print action_probs
-      #print (outs[5])
-      #print (outs[6])
+      # print (outs)
       # outs
 
       #mhr:useless?
@@ -524,17 +523,15 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
     
     if mode == 'train':
       n_step = sess.run(global_step)
-      #print feed_dict
+      print feed_dict
       
-      feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-      outss = sess.run([m.train_ops['step']], feed_dict=feed_dict)
-      print outss
-
+      
+      m.action_logits_op,
+      
+      
       #m.input_tensors['train']['action']
-      feed_dict[m.train_ops['batch_norm_is_training_op']] = True
-      outss = sess.run([m.train_ops['step']], feed_dict=feed_dict)
-      print outss
-      
+
+
       if np.mod(n_step, train_display_interval) == 0:
         total_loss, np_global_step, summary, print_summary = sess.run(
             [train_op, global_step, s_ops.summary_ops, s_ops.print_summary_ops],

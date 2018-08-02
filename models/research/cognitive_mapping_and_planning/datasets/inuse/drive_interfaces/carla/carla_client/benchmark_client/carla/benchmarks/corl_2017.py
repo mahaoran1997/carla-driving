@@ -12,8 +12,8 @@ import os
 
 from .benchmark import Benchmark
 from .experiment import Experiment
-from carla.sensor import Camera
-from carla.settings import CarlaSettings
+from datasets.inuse.drive_interfaces.carla.carla_client.benchmark_client.carla.sensor import Camera
+from datasets.inuse.drive_interfaces.carla.carla_client.benchmark_client.carla.settings import CarlaSettings
 
 from .metrics import compute_summary
 

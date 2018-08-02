@@ -11,7 +11,7 @@
 from __future__ import print_function
 import abc
 
-from carla.planner.planner import Planner
+from datasets.inuse.drive_interfaces.carla.carla_client.benchmark_client.carla.planner.planner import Planner
 
 
 class Agent(object):

@@ -56,6 +56,15 @@ from datasets.inuse.drive_interfaces.carla.carla_client.carla.agent import *
 from datasets.inuse.drive_interfaces.carla.carla_client.carla import Planner
 
 
+'''
+from datasets.inuse.drive_interfaces.carla.carla_client.benchmark_client.carla.benchmarks.agent import Agent as AgentBench
+from datasets.inuse.drive_interfaces.carla.carla_client.benchmark_client.carla.benchmarks.corl_2017 import CoRL2017
+
+from datasets.inuse.drive_interfaces.carla.carla_client.benchmark_client.carla.client import make_carla_client, VehicleControl
+from datasets.inuse.drive_interfaces.carla.carla_client.benchmark_client.carla.tcp import TCPConnectionError
+'''
+
+
 batch_size = 4
 
 sldist = lambda c1, c2: math.sqrt((c2[0] - c1[0]) ** 2 + (c2[1] - c1[1]) ** 2)
@@ -88,8 +97,16 @@ def get_camera_dict(ini_file):
         camera_dict.update({i: (cameras[i], angle)})
     return camera_dict
 
+def compute_angle(x0, y0, x1, y1):
+    cosv = (x0*x1 + y0*y1)/np.sqrt((x0**2+y0**2)*(x1**2+y1**2))
+    #print x0, y0, x1, y1, (x0**2+y0**2)*(x1**2+y1**2), cosv
+    return cosv
 
 def find_valid_episode_position(positions, waypointer, rng, difficulty):
+
+    far = False
+    debugging = False
+
     found_match = False
     while not found_match:
         index_start = rng.choice(range(len(positions))) #np.random.randint(len(positions))
@@ -98,28 +115,43 @@ def find_valid_episode_position(positions, waypointer, rng, difficulty):
                                         (start_pos.orientation.x, start_pos.orientation.y, start_pos.orientation.z)):
             continue
 
-        index_goals = []
-        for i in range(len(positions)):
-            tmp_pos =positions[i]  
-            if i!=start_pos and sldist([start_pos.location.x,start_pos.location.y],[tmp_pos.location.x,tmp_pos.location.y])<= difficulty:
-                index_goals.append(i)
+        if not far:
+            index_goals = []
+            for i in range(len(positions)):
+                tmp_pos =positions[i]  
+                dis = sldist([start_pos.location.x,start_pos.location.y],[tmp_pos.location.x,tmp_pos.location.y])
+                angle1 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.orientation.x,tmp_pos.orientation.y)
+                angle2 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.location.x-start_pos.location.x,tmp_pos.location.y-start_pos.location.y)
+                if i != index_start and angle1 > -0.7 and angle2 > -0.7 and dis>1000.0 and dis <= difficulty:
+                    index_goals.append(i)
 
-        index_goal = index_goals[rng.choice(range(len(index_goals)))]
+            index_goal = index_goals[rng.choice(range(len(index_goals)))]
+        else:
+            index_goal = rng.choice(range(len(positions))) #np.random.randint(len(positions))
+            if index_goal == index_start:
+                continue
         
-        #index_goal = rng.choice(range(len(positions))) #np.random.randint(len(positions))
-        #if index_goal == index_start:
-        #    continue
-
+        if (debugging):
+            index_start = 134
+            start_pos = positions[index_start]
+            index_goal = 136
+            tmp_pos =positions[index_goal]  
+            dis = sldist([start_pos.location.x,start_pos.location.y],[tmp_pos.location.x,tmp_pos.location.y])
+            angle1 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.orientation.x,tmp_pos.orientation.y)
+            angle2 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.location.x-start_pos.location.x,tmp_pos.location.y-start_pos.location.y)
+            print (angle1)
+            print (angle2)
         print (' TESTING (', index_start, ',', index_goal, ')')
         goals_pos = positions[index_goal]
         if not waypointer.test_position((goals_pos.location.x, goals_pos.location.y, 22),
                                         (goals_pos.orientation.x, goals_pos.orientation.y, goals_pos.orientation.z)):
             continue
-        #if sldist([start_pos.location.x, start_pos.location.y], [goals_pos.location.x, goals_pos.location.y]) < 25000.0:
-        #    print ('COntinued on distance ', sldist([start_pos.location.x, start_pos.location.y], [
-        #        goals_pos.location.x, goals_pos.location.y]))
+        
+        if far and sldist([start_pos.location.x, start_pos.location.y], [goals_pos.location.x, goals_pos.location.y]) < 25000.0:
+            print ('COntinued on distance ', sldist([start_pos.location.x, start_pos.location.y], [
+                goals_pos.location.x, goals_pos.location.y]))
 
-        #    continue
+            continue
 
         if waypointer.test_pair((start_pos.location.x, start_pos.location.y, 22),
                                 (start_pos.orientation.x, start_pos.orientation.y, start_pos.orientation.z),
@@ -138,8 +170,10 @@ class CarlaEnvMultiplexer:
         for i in range(batch_size):
             self.drive_configs.append(configDrive())#, self.drive_config, self.drive_config, self.drive_config]
         # TODO: adding more carla_configs
-        prefix = './datasets/inuse/drive_interfaces/carla/'
-        self.carla_configs = [prefix + 'CarlaSettings3CamTest.ini']
+        prefix = './datasets/inuse/drive_interfaces/carla/CarlaSettingCity1W'
+        self.carla_configs = []
+        for i in range(15):
+            self.carla_configs.append(prefix+str(i)+'.ini')
         self.carla_env_wrapper = None
         #self.driver = self.get_instance()
 
@@ -230,7 +264,7 @@ class CarlaEnvWrapper():
             map.append(line)
         for i in range(4):
             maps[i].append(map)'''
-        maps = np.zeros((4,1,1112,524,1))
+        maps = np.zeros((4,1,1,1,1)) #((4,1,1112,524,1))
         rel_goal_locs = []
         goal_locs = []
         #goal_locs.append([])
@@ -304,7 +338,7 @@ class CarlaEnvWrapper():
         for i in range(len(self.carla_envs)):
             if(step_number == 0):
                 self.carla_envs[i].skip_frames()
-                image, measurements, direction, reach_goal, action_noisy, control = self.carla_envs[i].get_data_for_mapper()
+                image, measurements, direction, reach_goal, action_noisy, control = self.carla_envs[i].get_data_for_mapper(step_number)
                 self.history[i].append((image, measurements, direction, reach_goal, action_noisy, control))
             else:
                 image, measurements, direction, reach_goal, action_noisy, control = self.history[i][step_number]
@@ -371,7 +405,7 @@ class CarlaEnvWrapper():
             self.carla_envs[i].act(action[i])
         
         for i in range(len(self.carla_envs)):
-            img, measurements, direction, reach_goal, action_noisy, control = self.carla_envs[i].get_data_for_mapper()
+            img, measurements, direction, reach_goal, action_noisy, control = self.carla_envs[i].get_data_for_mapper(step_number)
             self.history[i].append((img, measurements, direction, reach_goal, action_noisy, control))
             reward = 0
             if reach_goal:
@@ -458,6 +492,8 @@ class CarlaEnv(Driver):
         self._dist_to_activate = driver_conf.dist_to_activate # TODO:?
         # Set 10 frames to skip
         self._skiped_frames = driver_conf.skiped_frames  # TODO:?
+        self._replay_action = driver_conf.replay_action
+        self.reach_goal = False
 
 
     def close(self):
@@ -569,9 +605,9 @@ class CarlaEnv(Driver):
     
     def skip_frames(self):
         print ('skip')
-        for i in range(len(self._skiped_frames)):
+        for i in range(self._skiped_frames):
             measurements = self.carla.getMeasurements()
-            self.act([0.0, 0.0, 0.0])
+            self.act_once([0.0, 0.05, 0.0])
 
 
 
@@ -604,24 +640,40 @@ class CarlaEnv(Driver):
                player_data.transform.location.y, 22]
         ori = [player_data.transform.orientation.x,
                player_data.transform.orientation.y, player_data.transform.orientation.z]
+        
         reach_goal = 0
-        if sldist([player_data.transform.location.x, player_data.transform.location.y],
-					[self.positions[self.episode_config[1]].location.x,
-					self.positions[self.episode_config[1]].location.y]) < self._dist_to_activate:
-			reach_goal = 1
-			#self._reset()  # TODO: delete
+        if self.reach_goal:
+            reach_goal = 1
+        elif sldist([player_data.transform.location.x, player_data.transform.location.y],
+                    [self.positions[self.episode_config[1]].location.x,
+                    self.positions[self.episode_config[1]].location.y]) < self._dist_to_activate:
+            reach_goal = 1
+            self.reach_goal = True
+            #self._reset()  # TODO: delete
 		# print 'Selected Position ',self.episode_config[1],'from len ', len(self.positions)
 
-        direction, _ = self.planner.get_next_command(pos, ori, [
-			self.positions[self.episode_config[1]].location.x, self.positions[self.episode_config[1]].location.y,
-			22], (1, 0, 0))
-       	control = self._agent.get_control(
-        self._latest_measurements, self.positions[self.episode_config[1]])
-        action_noisy, drifting_time, will_drift = self.noiser.compute_noise(control, self._latest_measurements['PlayerMeasurements'].forward_speed)
-        self.expert_control = action_noisy
+        if reach_goal == 0:
+            direction, _ = self.planner.get_next_command(pos, ori, [
+                self.positions[self.episode_config[1]].location.x, self.positions[self.episode_config[1]].location.y,
+                22], (1, 0, 0))
+            control = self._agent.get_control(self._latest_measurements, self.positions[self.episode_config[1]])
+            action_noisy, drifting_time, will_drift = self.noiser.compute_noise(control, self._latest_measurements['PlayerMeasurements'].forward_speed)
+            self.expert_control = action_noisy
+        else:
+            direction = 3.0
+            control = Control()
+            control.steer = 0.0
+            control.throttle = 0.0
+            control.brake = 1.0
+            action_noisy = control
+            self.expert_control = action_noisy
         return measurements, direction, reach_goal, action_noisy, control
+        '''or \
+                    compute_angle(player_data.transform.orientation.x, player_data.transform.orientation.y,\
+                    self.positions[self.episode_config[1]].location.x- player_data.transform.location.x, \
+                    self.positions[self.episode_config[1]].location.y- player_data.transform.location.y) < -0.7'''
 
-    def get_data_for_mapper(self): #, typ='rgb'):
+    def get_data_for_mapper(self, step_number): #, typ='rgb'):
 
 		#recorder = Recorder(drive_config.path + folder_name + '/', drive_config.resolution, \
         #                    image_cut=drive_config.image_cut, camera_dict=camera_dict, record_waypoints=True)
@@ -631,17 +683,26 @@ class CarlaEnv(Driver):
             image = measurements['BGRA'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
             image = image[:, :, ::-1]
             image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
-            Image.fromarray(image).save("datasets/inuse/cog/img_"+str((self.id)) +"_" + str((capture_time)) + ".png")
+            if step_number % 4 == 0 or step_number==79:
+                Image.fromarray(image).save("datasets/inuse/cog/img_"+str((self.id)) +"_" + str((capture_time)) + ".jpg")
             #image_input = image *1. - 128
         elif self.typ == 'd':
             image = measurements['Depth'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
             image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
-            Image.fromarray(image).save("datasets/inuse/cog/dep_" +str((self.id)) +"_" + str((capture_time)) + ".png")
+            if step_number % 4 == 0 or step_number==79:
+                Image.fromarray(image).save("datasets/inuse/cog/dep_" +str((self.id)) +"_" + str((capture_time)) + ".jpg")
             #image_input = np.array(image)
         else:
             logging.fatal('Sampling not one of uniform.')
         return image, measurements, direction, reach_goal, action_noisy, control
 
+    def act_once(self, action):
+        control = Control()
+        print(action)
+        control.steer = action[0]
+        control.throttle = action[1]
+        control.brake = action[2]
+        self.carla.sendCommand(control)
 
     def act(self, action):
         control = Control()
@@ -650,6 +711,9 @@ class CarlaEnv(Driver):
         control.throttle = action[1]
         control.brake = action[2]
         #print(control.throttle)
+        for i in range(self._replay_action - 1):
+            self.carla.sendCommand(control)
+            self.carla.getMeasurements()
         self.carla.sendCommand(control)
 	
         '''self.rel_goal_loc_at_start = []
@@ -665,3 +729,47 @@ class CarlaEnv(Driver):
         self.rel_goal_loc_at_start.append(self.goal_pos.orientation.y*self.start_pos.orientation.x/(orientation_vec_length*goal_orientation_vec_length)-self.goal_pos.orientation.x*self.start_pos.orientation.y/(orientation_vec_length*goal_orientation_vec_length))
         '''
 
+
+'''
+class Manual(AgentBench):
+    """
+    Sample redefinition of the Agent,
+    An agent that goes straight
+    """
+    def run_step(self, measurements, sensor_data, target):
+        control = VehicleControl()
+        control.throttle = 0.9
+
+        return control
+
+class Machine(AgentBench):
+  def initialize(self):
+      pass
+
+  def run_step(self, measurements, sensor_data, target):
+      control = VehicleControl()
+      control.throttle = 0.9
+
+      return control
+
+
+
+city_name = 'Town02'
+host = 'localhost'
+port = 2012
+log_name = 'test'
+while True:
+    try:
+        with make_carla_client(host, port) as client:
+            corl = CoRL2017(city_name=city_name, name_to_save=log_name)
+            agent = Machine(city_name)
+            agent.initialize()
+            results = corl.benchmark_agent(agent, client)
+            corl.plot_summary_test()
+            corl.plot_summary_train()
+
+            break
+
+    except TCPConnectionError as error:
+        logging.error(error)
+        time.sleep(1)'''

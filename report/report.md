@@ -1,4 +1,4 @@
-#Cognitive Mapping and Planning on CARLA
+# Cognitive Mapping and Planning on CARLA
 
 > Adaptation of S. Gupta’s 2017 paper to CARLA
 
@@ -8,22 +8,22 @@
 > TODO
 -->
 
-###Architecture
+### Architecture
 
-> ######Architecture of Mapper
+> ###### Architecture of Mapper
 > 
 > ![Architecture of Mapper](pics/mapper.png)
 
 ---
 
-> ######Architecture of Hierarchical Planner
+> ###### Architecture of Hierarchical Planner
 > 
 > ![Architecture of Hierarchical Planner](pics/planner.png)
 
 
 
-###Differences
-####Environment Differences
+### Differences
+#### Environment Differences
 
 The original environment is the Stanford large-scale 3D Indoor Spaces (S3DIS) dataset. The dataset consists of 3D scans (in the form of textured meshes) collected in 6 large-scale indoor areas that originate from 3 different buildings of educational and office use.
 
@@ -45,7 +45,7 @@ Our environment is CARLA, an open-source simulator for autonomous driving resear
 	- Within 40 steps
 	- Within 80 frames when fps = 2
 
-####Architecture Differences
+#### Architecture Differences
 
 
 
@@ -60,11 +60,11 @@ DAGGER is used for training.
 
 
 
-###Training Result
+### Training Result
 
 It should be able to go straight/turn left/turn right at the intersection, but it seemed that it only learned a policy to follow the lane to go straight. The reward map has little effect.
 
-> ######Goal reward images at different scales: 
+> ###### Goal reward images at different scales: 
 > 
 > <div align="center">
 > <img src="pics/0_goal_img_0.jpg" height="150px" alt="0" >
@@ -86,7 +86,7 @@ It should be able to go straight/turn left/turn right at the intersection, but i
 -->
 
 
-###Explanation
+### Explanation
 
 I think there could be serveral reasons to explain why it could not learn to turn left/right using this architecture. 
 
@@ -110,7 +110,7 @@ I think there could be serveral reasons to explain why it could not learn to tur
 
 
 
-###Next Step:
+### Next Step:
 
 - Increase the ratio of turning in the datasets.
 - Replace VIN with CIL

@@ -67,13 +67,14 @@ from datasets.inuse.carla_env import *
 
 
 
-
 '''
+logdir = 'output/cmp.lmap_Msc.clip5.sbpd_rgb_r2r_new29'
 iter = 0
 rng_data = [np.random.RandomState(0), np.random.RandomState(0)]
 train_step_kwargs={}
 R = lambda: CarlaEnvMultiplexer()
 train_step_kwargs['obj'] = R()  
+n_step = 0
 while True:
   iter += 1
   print ('iter{:d}'.format(iter))
@@ -85,19 +86,40 @@ while True:
   #input = e.pre_common_data(input) #mhr: useless 
   print ("---------------common_data-----------------")    
   #print(input)
-
+  n_step+=1
+  if not os.path.exists(logdir+"/logfiles/"+str(n_step)):
+      os.makedirs(logdir+"/logfiles/"+str(n_step))
   states = []
   states.append(init_env_state)
   for i in range(80):
     f = e.get_features(states[i], i)
+    goal_img_0_pre = np.sum(f['ego_goal_imgs_0'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
+    goal_img_0 = np.concatenate((goal_img_0_pre, goal_img_0_pre, goal_img_0_pre), 2)
+    goal_img_1_pre = np.sum(f['ego_goal_imgs_1'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
+    goal_img_1 = np.concatenate((goal_img_1_pre, goal_img_1_pre, goal_img_1_pre), 2)
+    goal_img_2_pre = np.sum(f['ego_goal_imgs_2'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
+    goal_img_2 = np.concatenate((goal_img_2_pre, goal_img_2_pre, goal_img_2_pre), 2)
+    
+    #Image.fromarray(goal_img_0.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_0.jpg")
+    #Image.fromarray(goal_img_1.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_1.jpg")
+    #Image.fromarray(goal_img_2.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_2.jpg")
+    
+    #print(np.uint8(goal_img_0))
+    Image.fromarray(np.uint8(goal_img_0)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(i)+"_goal_img_0.jpg")
+    Image.fromarray(np.uint8(goal_img_1)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(i)+"_goal_img_1.jpg")
+    Image.fromarray(np.uint8(goal_img_2)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(i)+"_goal_img_2.jpg")
+    #print(f['ego_goal_imgs_0'])
     optimal_action = e.get_optimal_action(states[i], i)
     print('----optimal-----')
     print (optimal_action)
     next_state, reward = e.take_action(states[i], optimal_action, i)
     states.append(next_state)
 '''
-
-
+#image = measurements['BGRA'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
+#image = image[:, :, ::-1]
+#image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
+#if step_number % 4 == 0 or step_number==79:
+#    Image.fromarray(image).save("datasets/inuse/cog/img_"+str((self.id)) +"_" + str((capture_time)) + ".jpg")
 ''' 
   obj        = train_step_kwargs['obj']  
   e = obj.sample_env(rng_data)
@@ -213,7 +235,7 @@ def _train(args):
             num_steps=args.navtask.task_params.num_steps*args.navtask.task_params.num_goals, iters=1,
             train_display_interval=args.summary.display_interval,
             dagger_sample_bn_false=args.arch.dagger_sample_bn_false)
-
+        #print train_step_kwargs['logdir']
         
 
 

@@ -157,6 +157,8 @@ def find_valid_episode_position(positions, waypointer, rng, difficulty):
                                 (start_pos.orientation.x, start_pos.orientation.y, start_pos.orientation.z),
                                 (goals_pos.location.x, goals_pos.location.y, 22)):
             found_match = True
+            print ("-----------choose------------")
+            print index_start, index_goal
         waypointer.reset()
     waypointer.reset()
 
@@ -344,8 +346,8 @@ class CarlaEnvWrapper():
                 image, measurements, direction, reach_goal, action_noisy, control = self.history[i][step_number]
             outs['loc_on_map'].append([[measurements['PlayerMeasurements'].transform.location.x, measurements['PlayerMeasurements'].transform.location.y]])
             goal_imgs = self.carla_envs[i].get_ego_goal_img()
-            for i in range(len(goal_imgs)):
-                outs['ego_goal_imgs_{:d}'.format(i)].append(goal_imgs[i])
+            for j in range(len(goal_imgs)):
+                outs['ego_goal_imgs_{:d}'.format(j)].append(goal_imgs[j])
             current_theta = np.arctan2(measurements['PlayerMeasurements'].transform.orientation.y, measurements['PlayerMeasurements'].transform.orientation.x)
             if (step_number > 0):
                 if measurements['PlayerMeasurements'].transform.location.y-self.history[i][step_number-1][1]['PlayerMeasurements'].transform.location.y < 0.1 and measurements['PlayerMeasurements'].transform.location.x-self.history[i][step_number-1][1]['PlayerMeasurements'].transform.location.x < 0.1:
@@ -356,7 +358,7 @@ class CarlaEnvWrapper():
             else:
                 translation_theta = current_theta
                 previous_theta = current_theta
-            outs['incremental_thetas'].append([[translation_theta - previous_theta, current_theta - translation_theta]])
+            outs['incremental_thetas'].append([[-(translation_theta - previous_theta), -(current_theta - translation_theta)]])
             outs['imgs'].append([[self.image_preprocess(image)]])
             if step_number > 0:
                 square = np.square(measurements['PlayerMeasurements'].transform.location.y-self.history[i][step_number-1][1]['PlayerMeasurements'].transform.location.y) +np.square(measurements['PlayerMeasurements'].transform.location.x-self.history[i][step_number-1][1]['PlayerMeasurements'].transform.location.x)
@@ -521,18 +523,24 @@ class CarlaEnv(Driver):
 
         #return [[rel_x, rel_y, cos, sin]]
 
+        #print goal_pos.location.x, goal_pos.location.y, goal_pos.orientation.x, goal_pos.orientation.y
+        #print current_pos.location.x, current_pos.location.y, current_pos.orientation.x, current_pos.orientation.y
+
         rel_goal_loc = []
 
-        dy = goal_pos.location.y - current_pos.location.y
-        dx = goal_pos.location.x - current_pos.location.x
+        dy = 0 - (goal_pos.location.y - current_pos.location.y)
+        dx = (goal_pos.location.x - current_pos.location.x)
         orientation_vec_square = np.square(current_pos.orientation.x)+np.square(current_pos.orientation.y)
         orientation_vec_length = np.sqrt(orientation_vec_square)
         goal_orientation_vec_square = np.square(goal_pos.orientation.x)+np.square(goal_pos.orientation.y)
         goal_orientation_vec_length = np.sqrt(goal_orientation_vec_square)
-        rel_goal_loc.append((current_pos.orientation.y*dx-current_pos.orientation.x*dy)/orientation_vec_length)
-        rel_goal_loc.append((current_pos.orientation.x*dx+current_pos.orientation.y*dy)/orientation_vec_length)
-        rel_goal_loc.append(current_pos.orientation.x*goal_pos.orientation.x/(orientation_vec_length*goal_orientation_vec_length)+current_pos.orientation.y*goal_pos.orientation.y/(orientation_vec_length*goal_orientation_vec_length))
-        rel_goal_loc.append(goal_pos.orientation.y*current_pos.orientation.x/(orientation_vec_length*goal_orientation_vec_length)-goal_pos.orientation.x*current_pos.orientation.y/(orientation_vec_length*goal_orientation_vec_length))
+        rel_goal_loc.append(((-current_pos.orientation.y)*dx-current_pos.orientation.x*dy)/orientation_vec_length)
+        rel_goal_loc.append((current_pos.orientation.x*dx+(-current_pos.orientation.y)*dy)/orientation_vec_length)
+        rel_goal_loc.append(current_pos.orientation.x*goal_pos.orientation.x/(orientation_vec_length*goal_orientation_vec_length)+(-current_pos.orientation.y)*(-goal_pos.orientation.y)/(orientation_vec_length*goal_orientation_vec_length))
+        rel_goal_loc.append((-goal_pos.orientation.y)*current_pos.orientation.x/(orientation_vec_length*goal_orientation_vec_length)-goal_pos.orientation.x*(-current_pos.orientation.y)/(orientation_vec_length*goal_orientation_vec_length))
+        
+        #print rel_goal_loc
+
         return rel_goal_loc
 
     def get_goal_loc_at_start(self):
@@ -564,9 +572,11 @@ class CarlaEnv(Driver):
                 rel_goal_orientation = 1
 
         goals = []
+        print rel_goal_loc_at_current[0]
+        print rel_goal_loc_at_current[1]
         for i, (sc, map_crop_size) in enumerate(zip(self._map_scales, self._map_crop_sizes)):
             x = rel_goal_loc_at_current[0]*sc + (map_crop_size-1.)/2.
-            y = rel_goal_loc_at_current[0]*sc + (map_crop_size-1.)/2.
+            y = rel_goal_loc_at_current[1]*sc + (map_crop_size-1.)/2.
             goal_i = np.zeros((1, map_crop_size, map_crop_size, self._n_ori), dtype=np.float32)
             gc = rel_goal_orientation
             x0 = np.floor(x).astype(np.int32)
@@ -575,15 +585,15 @@ class CarlaEnv(Driver):
             y1 = y0 + 1
             if x0 >= 0 and x0 <= map_crop_size-1:
                 if y0 >= 0 and y0 <= map_crop_size-1:
-                    goal_i[0, y0, x0, gc] = (x1-x)*(y1-y)
+                    goal_i[0, map_crop_size-1-y0, x0, gc] = (x1-x)*(y1-y)
                 if y1 >= 0 and y1 <= map_crop_size-1:
-                    goal_i[0, y1, x0, gc] = (x1-x)*(y-y0)
+                    goal_i[0, map_crop_size-1-y1, x0, gc] = (x1-x)*(y-y0)
 
             if x1 >= 0 and x1 <= map_crop_size-1:
                 if y0 >= 0 and y0 <= map_crop_size-1:
-                    goal_i[0, y0, x1, gc] = (x-x0)*(y1-y)
+                    goal_i[0, map_crop_size-1-y0, x1, gc] = (x-x0)*(y1-y)
                 if y1 >= 0 and y1 <= map_crop_size-1:
-                    goal_i[0, y1, x1, gc] = (x-x0)*(y-y0)
+                    goal_i[0, map_crop_size-1-y1, x1, gc] = (x-x0)*(y-y0)
             goals.append(goal_i)
         return goals
 
@@ -607,7 +617,17 @@ class CarlaEnv(Driver):
         print ('skip')
         for i in range(self._skiped_frames):
             measurements = self.carla.getMeasurements()
-            self.act_once([0.0, 0.05, 0.0])
+            capture_time = time.time()
+            image = measurements['BGRA'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
+            image = image[:, :, ::-1]
+            image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
+            Image.fromarray(image).save("datasets/inuse/cog/pre_img_"+str((self.id)) +"_"+str(i) + "_"+str((capture_time)) + ".jpg")
+            player_data = measurements['PlayerMeasurements']
+            pos = [player_data.transform.location.x, player_data.transform.location.y, 22]
+            ori = [player_data.transform.orientation.x, player_data.transform.orientation.y, player_data.transform.orientation.z]
+            control = self._agent.get_control(measurements, self.positions[self.episode_config[1]])
+            action_noisy, drifting_time, will_drift = self.noiser.compute_noise(control, measurements['PlayerMeasurements'].forward_speed)
+            self.act_once([action_noisy.steer, action_noisy.throttle, action_noisy.brake])
 
 
 

@@ -59,6 +59,9 @@ def value_iteration_network(
       val_shape = tf.shape(val)
     vals.append(val)
     for i in range(num_iters):
+      print("---------------Value Iteration------------------")
+      print(num_iters)
+
       if share_wts:
         # The first Value Iteration maybe special, so it can have its own
         # paramterss.

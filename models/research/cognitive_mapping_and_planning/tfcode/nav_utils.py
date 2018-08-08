@@ -45,8 +45,7 @@ def compute_losses_multi_or(logits, actions_one_hot, weights=None,
   with tf.name_scope('loss'):
     if weights is None:
       #!!!!mhr:????weight
-      weights = tf.ones_like(actions_one_hot, dtype=tf.float32, name='weight')
-    
+      weights = tf.ones_like(actions_one_hot, dtype=tf.float32, name='weight')   
     actions_one_hot = tf.cast(tf.reshape(actions_one_hot, [-1, num_actions],
                                          're_actions_one_hot'), tf.float32)
     weights = tf.reshape(weights, [-1, num_actions], 're_weight')
@@ -60,16 +59,18 @@ def compute_losses_multi_or(logits, actions_one_hot, weights=None,
     #example_loss = -tf.log(tf.maximum(tf.constant(1e-4), action_prob))
 
     #data_loss_op = tf.reduce_sum(example_loss * weights) / total
-    print actions_one_hot
-    print logits
-    print weights
-    print total
+    #print actions_one_hot
+    #print logits
+    #print weights
+    #print total
 
     #action_prob = tf.nn.softmax(logits)
     #action_prob = 
-    example_loss = tf.reduce_sum(tf.square(logits - actions_one_hot), 1)
+    #steer_pre, throttle_brake_pre = tf.split(logits, [1,2], axis = 1)
 
-    data_loss_op = tf.reduce_sum(example_loss * weights_sum) / total
+    example_loss = tf.reduce_sum(weights * tf.square(logits - actions_one_hot), 1)
+
+    data_loss_op = tf.reduce_sum(example_loss) / total
 
     #data_loss_op = tf.losses.mean_squared_error( actions_one_hot, logits, weights, scope='loss')/total
     if reg_loss_op is None:
@@ -83,7 +84,7 @@ def compute_losses_multi_or(logits, actions_one_hot, weights=None,
     else:
       total_loss_op = data_loss_wt*data_loss_op
 
-    is_correct = tf.cast(tf.less(tf.reduce_sum(tf.square(actions_one_hot - logits), 1), 0.1, name='pred_class'),  tf.float32) 
+    is_correct = tf.cast(tf.less(example_loss, 0.03, name='pred_class'),  tf.float32) 
     acc_op = tf.reduce_sum(is_correct*weights_sum) / total
 
     ewma_acc_op = moving_averages.weighted_moving_average(

@@ -149,7 +149,7 @@ def process_arch_learned_map(args, arch_vars):
   elif (arch_vars.var2 == 'Msc' or arch_vars.var2 == 'MscROMms' or
         arch_vars.var2 == 'MscROMss' or arch_vars.var2 == 'MscNoVin'):
     # Code for multi-scale planner.
-    args.arch.vin_num_iters = 8
+    args.arch.vin_num_iters = 10  #mhr: 8
     args.arch.crop_remove_each = 4
     args.arch.value_crop_size = 8
 
@@ -159,8 +159,7 @@ def process_arch_learned_map(args, arch_vars):
     n_scales = np.log2(float(max_dist) / float(args.arch.vin_num_iters))
     n_scales = int(np.ceil(n_scales)+1)
 
-    args.navtask.task_params.map_scales = \
-        list(sc*(0.5**(np.arange(n_scales))[::-1]))
+    args.navtask.task_params.map_scales = [0.00125, 0.0025, 0.005] #list(sc*(0.5**(np.arange(n_scales))[::-1]))
     args.navtask.task_params.map_crop_sizes = [16 for x in range(n_scales)]
 
     args.arch.fr_stride = 1

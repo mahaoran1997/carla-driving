@@ -226,6 +226,7 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
     init_var = np.sqrt(2.0/(ks**2)/neurons)
     batch_norm_param = mapper_arch.batch_norm_param
     batch_norm_param['is_training'] = batch_norm_is_training_op
+    batch_norm_param['decay'] = 0.99 #mhr: 0.999
     print('adfasdf')
     print(x.get_shape().as_list())
     out.conv_feat = slim.conv2d(x, neurons, kernel_size=ks, stride=1,
@@ -242,7 +243,8 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
     # Fully connected layers to compute the representation in top-view space.
     fc_batch_norm_param = {'center': True, 'scale': True, 
                            'activation_fn':tf.nn.relu,
-                           'is_training': batch_norm_is_training_op}
+                           'is_training': batch_norm_is_training_op,
+                           'decay' : 0.99} #mhr: 0.9
     f = out.reshape_conv_feat
     out_neurons = (mapper_arch.fc_out_size**2)*mapper_arch.fc_out_neurons
     neurons = mapper_arch.fc_neurons + [out_neurons]
@@ -295,7 +297,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   m.train_ops = {}
   m.input_tensors['common'], m.input_tensors['step'], m.input_tensors['train'] = \
       _inputs(task_params)
-
+  
   m.init_fn = None
 
   if task_params.input_type == 'vision':
@@ -462,11 +464,24 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
     batch_norm_param = args.arch.pred_batch_norm_param
     if batch_norm_param is not None:
       batch_norm_param['is_training'] = batch_norm_is_training_op
-    m.action_logits_op, _ = tf_utils.fc_network(
+      batch_norm_param['decay'] = 0.99 #mhr: 0.9
+    m.action_logits_op_pre, _ = tf_utils.fc_network(
         m.value_features_op, neurons=args.arch.pred_neurons,
         wt_decay=args.solver.wt_decay, name='pred', offset=0,
         num_pred=task_params.num_actions, 
         batch_norm_param=batch_norm_param) #mhr:!!!!!!! num_actions: 4->3
+
+    print(m.action_logits_op_pre.get_shape().as_list())
+    steer_pre, throttle_brake_pre = tf.split(m.action_logits_op_pre, [1,2], axis = 1)
+
+    steer = tf.tanh(steer_pre)
+    throttle_brake = tf.sigmoid(throttle_brake_pre)
+    m.action_logits_op = tf.concat([steer, throttle_brake], axis = 1)
+
+    print(steer.get_shape().as_list())
+    print(throttle_brake.get_shape().as_list())
+    print(m.action_logits_op.get_shape().as_list())
+    #m.action_logits_op = m.action_logits_op_pre
     #m.action_prob_op = tf.nn.softmax(m.action_logits_op)
 
   init_state = tf.constant(0., dtype=tf.float32, shape=[
@@ -509,13 +524,20 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
       m.readout_maps_loss_op = 10.*m.readout_maps_loss_op
 
   ewma_decay = 0.99 if is_training else 0.0
-  weight = tf.ones_like(m.input_tensors['train']['action'], dtype=tf.float32,
-                        name='weight')
+
+
+  weight_one = tf.ones_like(m.input_tensors['train']['action'], dtype=tf.float32, name='weight')
+  ones_old, ones = tf.split(weight_one, [1,2], 2)
+  
+  tens = ones_old * 10.0
+  weight = tf.concat([tens, ones], 2)
+  sh_list = weight.get_shape().as_list()
+  print(sh_list)
   m.reg_loss_op, m.data_loss_op, m.total_loss_op, m.acc_ops = \
     compute_losses_multi_or(m.action_logits_op,
                             m.input_tensors['train']['action'], weights=weight,
                             num_actions=task_params.num_actions,
-                            data_loss_wt=10 ,#args.solver.data_loss_wt,
+                            data_loss_wt=100 ,#args.solver.data_loss_wt,
                             reg_loss_wt= 0.05,#args.solver.reg_loss_wt,
                             ewma_decay=ewma_decay)
   

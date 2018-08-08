@@ -13,8 +13,10 @@
 # limitations under the License.
 # ==============================================================================
 
+
+import pickle
 import numpy as np
-import sys
+import sys, os
 import tensorflow as tf
 import src.utils as utils
 import logging
@@ -55,7 +57,7 @@ def custom_residual_block(x, neurons, kernel_size, stride, name, is_training,
       batch_norm_param = {'center': True, 'scale': False, 
                           'activation_fn':tf.nn.relu, 
                           'is_training': is_training}
-    
+    batch_norm_param['decay'] = 0.99 #mhr: 0.9
     y = slim.batch_norm(x, scope=name+'_bn', **batch_norm_param)
 
     y = conv_fn(y, num_outputs=neurons, kernel_size=kernel_size, stride=stride,
@@ -91,7 +93,7 @@ def step_gt_prob(step, step_number_op):
 
 def inverse_sigmoid_decay(k, global_step_op):
   with tf.name_scope('inverse_sigmoid_decay'):
-    k = tf.constant(k/8, dtype=tf.float32) #mhr:!!!! no /10
+    k = tf.constant(k/2, dtype=tf.float32) #mhr:!!!! no /10
     tmp = k*tf.exp(-tf.cast(global_step_op, tf.float32)/k)
     tmp = tmp / (1. + tmp)
   return tmp
@@ -239,6 +241,7 @@ def fc_network(x, neurons, wt_decay, name, num_pred=None, offset=0,
   for i, neuron in enumerate(neurons):
     init_var = np.sqrt(2.0/neuron)
     if batch_norm_param is not None:
+      batch_norm_param['decay'] = 0.99 #mhr: 0.9
       x = slim.fully_connected(x, neuron, activation_fn=None,
                                weights_initializer=tf.random_normal_initializer(stddev=init_var),
                                weights_regularizer=slim.l2_regularizer(wt_decay),
@@ -343,7 +346,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
   rng_action = train_step_kwargs['rng_action'] #mhr: np.random.RandomState(rng_seed)
   writer     = train_step_kwargs['writer'] 
   iters      = train_step_kwargs['iters']    #mhr: 1
-  num_steps  = train_step_kwargs['num_steps'] #mhr: 40
+  num_steps  = train_step_kwargs['num_steps'] #mhr: 40 -> 80
   logdir     = train_step_kwargs['logdir']
   dagger_sample_bn_false = train_step_kwargs['dagger_sample_bn_false']   #mhr: True
   train_display_interval = train_step_kwargs['train_display_interval']  #mhr: 1
@@ -369,8 +372,11 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       logging.info('XXXX: variable: %30s, is_any_nan: %5s, norm: %f.',
                    v[i].name, np.any(np.isnan(v_op_value[i])),
                    np.linalg.norm(v_op_value[i]))
-
+  
   tt = utils.Timer()
+
+  
+
   for i in range(iters):
     tt.tic()
     # Sample a room.
@@ -428,9 +434,50 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 
 
     net_state_to_input.append(net_state)
+
+
+    #outpkl = {}
+    #outpkl['feed_dict'] =[]
+    #fpkl = outpkl['feed_dict']
+    '''fpkl['ego_goal_imgs_0'] = []
+    fpkl['ego_goal_imgs_1'] = []
+    fpkl['ego_goal_imgs_2'] = []'''
+    n_step = sess.run(global_step)
+    if not os.path.exists(logdir+"/logfiles/"+str(n_step)):
+      os.makedirs(logdir+"/logfiles/"+str(n_step))
+      #outputfile = open(logdir+"/logfiles/"+str(n_step)+".pkl", "w")
+    output_file = open(logdir+"/logfiles/"+str(n_step)+"/output.txt", "w")
     for j in range(num_steps):
+      #rec = {}
       print ('num_step: {:d}'.format(j))
       f = e.get_features(states[j], j)
+      #rec['ego_goal_imgs_0']=f['ego_goal_imgs_0'].tolist()
+      #rec['ego_goal_imgs_1']=f['ego_goal_imgs_1'].tolist()
+      #rec['ego_goal_imgs_2']=f['ego_goal_imgs_2'].tolist()
+      goal_img_0_pre = np.sum(f['ego_goal_imgs_0'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
+      goal_img_0 = np.concatenate((goal_img_0_pre, goal_img_0_pre, goal_img_0_pre), 2)
+      goal_img_1_pre = np.sum(f['ego_goal_imgs_1'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
+      goal_img_1 = np.concatenate((goal_img_1_pre, goal_img_1_pre, goal_img_1_pre), 2)
+      goal_img_2_pre = np.sum(f['ego_goal_imgs_2'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
+      goal_img_2 = np.concatenate((goal_img_2_pre, goal_img_2_pre, goal_img_2_pre), 2)
+      '''Image.fromarray(goal_img_0.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_0.jpg")
+      Image.fromarray(goal_img_1.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_1.jpg")
+      Image.fromarray(goal_img_2.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_2.jpg")
+      '''
+      Image.fromarray(np.uint8(goal_img_0)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_0.jpg")
+      Image.fromarray(np.uint8(goal_img_1)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_1.jpg")
+      Image.fromarray(np.uint8(goal_img_2)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_2.jpg")
+      
+      sum_num_0 = net_state['running_sum_num_0'][0, 0, :, :, :3] + 128.0
+      sum_num_1 = net_state['running_sum_num_1'][0, 0, :, :, :3] + 128.0
+      sum_num_2 = net_state['running_sum_num_2'][0, 0, :, :, :3] + 128.0
+
+      Image.fromarray(np.uint8(sum_num_0)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_sum_num_0.jpg")
+      Image.fromarray(np.uint8(sum_num_1)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_sum_num_1.jpg")
+      Image.fromarray(np.uint8(sum_num_2)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_sum_num_2.jpg")
+      
+      output_file.write(str(f['incremental_locs']))
+      output_file.write(str(f['incremental_thetas']))
       #f = e.pre_features(f)
       print ("----------------------------------f----------------------------------")
       #print(f)
@@ -449,18 +496,20 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
                        m.train_ops['step_data_cache'],
                        m.train_ops['updated_state'],
-                       m.train_ops['outputs'], m.ego_map_ops, m.coverage_ops], feed_dict=feed_dict)
+                       m.train_ops['outputs'],  m.action_logits_op_pre], feed_dict=feed_dict)
+      '''m.ego_map_ops, m.coverage_ops,'''
       action_probs = outs[0]
       sample_gt_prob = outs[1]
       step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
       net_state = outs[3]
-
+      #rec['space']=outs[3].tolist()
+      #rec['action_probs']=outs[0].tolist()
       print ("----------------outs-----------------")
       print action_probs
-      #print (outs[5])
+      print (outs[5])
       #print (outs[6])
       # outs
-
+      #fpkl.append(rec)
       #mhr:useless?
       if hasattr(e, 'update_state'):
         outputs = outs[4]
@@ -479,7 +528,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
         next_state, reward = e.take_action(states[j], action, j)
 
         print ("----------------action, action_sample_wt, next_state, reward-----------------")
-        print action, action_sample_wt, next_state, reward
+        print action, action_sample_wt, reward
 
         executed_actions.append(action)
         states.append(next_state)
@@ -489,7 +538,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
         net_state_to_input.append(net_state)
         print ("----------------net_state_below-----------------")
         #print net_state
-    
+    output_file.close()
     
     #e.sample_env
     # Concatenate things together for training.
@@ -515,7 +564,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
                        'executed_actions': executed_actions})
     feed_dict = prepare_feed_dict(m.input_tensors['train'], dict_train)
     
-    print dict_train['action']
+    #print feed_dict['rewards']
 
     for x in m.train_ops['step_data_cache']:
       feed_dict[x] = all_step_data_cache[x]
@@ -523,17 +572,15 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
     # mhr: Train the model
     
     if mode == 'train':
-      n_step = sess.run(global_step)
-      #print feed_dict
+      #n_step = sess.run(global_step)
       
       feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-      outss = sess.run([m.train_ops['step']], feed_dict=feed_dict)
+      outss = sess.run([m.train_ops['step'],m.action_logits_op_pre], feed_dict=feed_dict)
       print outss
 
-      #m.input_tensors['train']['action']
       feed_dict[m.train_ops['batch_norm_is_training_op']] = True
-      outss = sess.run([m.train_ops['step']], feed_dict=feed_dict)
-      print outss
+      outss = sess.run([m.train_ops['step'],m.action_logits_op_pre], feed_dict=feed_dict)
+      print(outss)
       
       if np.mod(n_step, train_display_interval) == 0:
         total_loss, np_global_step, summary, print_summary = sess.run(
@@ -600,7 +647,7 @@ def train_step_custom_v2(sess, train_op, global_step, train_step_kwargs,
 
   s_ops = m.summary_ops[mode]
   val_additional_ops = [] 
-
+ 
   # Print all variables here.
   if False:
     v = tf.get_collection(tf.GraphKeys.VARIABLES)

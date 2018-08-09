@@ -68,11 +68,18 @@ from datasets.inuse.carla_env import *
 
 
 '''
-logdir = 'output/cmp.lmap_Msc.clip5.sbpd_rgb_r2r_new29'
+def concat_state_x(f, names):
+  af = {}
+  for k in names:
+    af[k] = np.concatenate([x[k] for x in f], axis=1)
+    # af[k] = np.swapaxes(af[k], 0, 1)
+  return af
+
+logdir = 'output/cmp.lmap_Msc.clip5.sbpd_rgb_r2r_new32'
 iter = 0
 rng_data = [np.random.RandomState(0), np.random.RandomState(0)]
 train_step_kwargs={}
-R = lambda: CarlaEnvMultiplexer()
+R = lambda: CarlaEnvMultiplexer(logdir)
 train_step_kwargs['obj'] = R()  
 n_step = 0
 while True:
@@ -90,6 +97,7 @@ while True:
   if not os.path.exists(logdir+"/logfiles/"+str(n_step)):
       os.makedirs(logdir+"/logfiles/"+str(n_step))
   states = []
+  state_targets = []
   states.append(init_env_state)
   for i in range(80):
     f = e.get_features(states[i], i)
@@ -110,11 +118,18 @@ while True:
     Image.fromarray(np.uint8(goal_img_2)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(i)+"_goal_img_2.jpg")
     #print(f['ego_goal_imgs_0'])
     optimal_action = e.get_optimal_action(states[i], i)
+    state_targets.append(e.get_targets(states[i], i))
     print('----optimal-----')
     print (optimal_action)
     next_state, reward = e.take_action(states[i], optimal_action, i)
     states.append(next_state)
+  all_state_targets = concat_state_x(state_targets, e.get_targets_name())
+  dict_train = dict()
+  dict_train.update(all_state_targets)
+  print dict_train
 '''
+
+
 #image = measurements['BGRA'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
 #image = image[:, :, ::-1]
 #image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])

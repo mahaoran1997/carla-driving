@@ -550,6 +550,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
                                         e.get_features_name()+['step_number'])
     # all_state_net = concat_state_x(net_state_to_input,
     # m.train_ops['state_names'])
+    #print()
     all_step_data_cache = concat_state_x(step_data_cache,
                                          m.train_ops['step_data_cache'])
 
@@ -563,7 +564,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
                        'action_sample_wts': action_sample_wts,
                        'executed_actions': executed_actions})
     feed_dict = prepare_feed_dict(m.input_tensors['train'], dict_train)
-    
+    print feed_dict['action']
     #print feed_dict['rewards']
 
     for x in m.train_ops['step_data_cache']:

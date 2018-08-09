@@ -166,7 +166,10 @@ def find_valid_episode_position(positions, waypointer, rng, difficulty):
 
 
 class CarlaEnvMultiplexer:
-    def __init__(self):
+    def __init__(self, logdir):
+        logdir += '/pics'
+        if not os.path.exists(logdir):
+            os.makedirs(logdir)
         #self.drive_config = configDrive()
         self.drive_configs = []
         for i in range(batch_size):
@@ -178,6 +181,7 @@ class CarlaEnvMultiplexer:
             self.carla_configs.append(prefix+str(i)+'.ini')
         self.carla_env_wrapper = None
         #self.driver = self.get_instance()
+        self.logdir = logdir
 
     def sample_env(self, rngs):
         #get carla_env_wrapper
@@ -191,7 +195,7 @@ class CarlaEnvMultiplexer:
             print ("reset_env!!!!!!!!!")
             self.carla_env_wrapper.reset_config(self.drive_configs)
         else:
-            self.carla_env_wrapper = CarlaEnvWrapper(self.drive_configs)
+            self.carla_env_wrapper = CarlaEnvWrapper(self.drive_configs, self.logdir)
         return self.carla_env_wrapper
     
     def close(self):
@@ -201,12 +205,13 @@ class CarlaEnvMultiplexer:
 
 class CarlaEnvWrapper():
 
-    def __init__(self, drive_configs):
+    def __init__(self, drive_configs, logdir):
         #create_env
         self.need_reset = False
         self.drive_configs = drive_configs
         self.carla_envs = []
         self.history = []
+        self.logdir = logdir
         for i in range(len(drive_configs)):
             print ('Environment {:d}'.format(i))
             self.carla_envs.append(self.create_env(drive_configs[i], i))
@@ -247,7 +252,7 @@ class CarlaEnvWrapper():
 
     def create_env(self, drive_config, env_id):
         #get carla_env but do not start
-        driver = CarlaEnv(drive_config, env_id)
+        driver = CarlaEnv(drive_config, env_id, self.logdir)
         camera_dict = get_camera_dict(drive_config.carla_config)
         print " Camera Dict "
         print camera_dict
@@ -422,10 +427,11 @@ class CarlaEnvWrapper():
 
 class CarlaEnv(Driver):
 
-    def __init__(self, driver_conf, env_id):
+    def __init__(self, driver_conf, env_id, logdir):
         Driver.__init__(self)
         self.reset_config(driver_conf)
         self.id = env_id
+        self.logdir = logdir
         # self._straight_button = False
         # self._left_button = False
         # self._right_button = False
@@ -621,7 +627,7 @@ class CarlaEnv(Driver):
             image = measurements['BGRA'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
             image = image[:, :, ::-1]
             image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
-            Image.fromarray(image).save("datasets/inuse/cog/pre_img_"+str((self.id)) +"_"+str(i) + "_"+str((capture_time)) + ".jpg")
+            Image.fromarray(image).save(self.logdir+"/pre_img_"+str((self.id)) +"_"+str(i) + "_"+str((capture_time)) + ".jpg")
             player_data = measurements['PlayerMeasurements']
             pos = [player_data.transform.location.x, player_data.transform.location.y, 22]
             ori = [player_data.transform.orientation.x, player_data.transform.orientation.y, player_data.transform.orientation.z]
@@ -704,13 +710,13 @@ class CarlaEnv(Driver):
             image = image[:, :, ::-1]
             image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
             if step_number % 4 == 0 or step_number==79:
-                Image.fromarray(image).save("datasets/inuse/cog/img_"+str((self.id)) +"_" + str((capture_time)) + ".jpg")
+                Image.fromarray(image).save(self.logdir+"/img_"+str((self.id)) +"_" + str((capture_time)) + ".jpg")
             #image_input = image *1. - 128
         elif self.typ == 'd':
             image = measurements['Depth'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
             image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
             if step_number % 4 == 0 or step_number==79:
-                Image.fromarray(image).save("datasets/inuse/cog/dep_" +str((self.id)) +"_" + str((capture_time)) + ".jpg")
+                Image.fromarray(image).save(self.logdir+"/dep_" +str((self.id)) +"_" + str((capture_time)) + ".jpg")
             #image_input = np.array(image)
         else:
             logging.fatal('Sampling not one of uniform.')

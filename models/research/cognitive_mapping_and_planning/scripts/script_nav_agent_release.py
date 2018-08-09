@@ -212,7 +212,7 @@ def _train(args):
   container_name = ""
 
   #R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
-  R = lambda: CarlaEnvMultiplexer()
+  R = lambda: CarlaEnvMultiplexer(args.logdir)
 
   
   

@@ -110,6 +110,9 @@ I think there could be serveral reasons to explain why it could not learn to tur
 
 
 
+
+
+
 ### Next Step:
 
 - Increase the ratio of turning in the datasets.

@@ -70,7 +70,7 @@ def compute_losses_multi_or(logits, actions_one_hot, weights=None,
 
     example_loss = tf.reduce_sum(weights * tf.square(logits - actions_one_hot), 1)
 
-    data_loss_op = tf.reduce_sum(example_loss) / total
+    data_loss_op = tf.reduce_sum(example_loss * weights_sum) / total
 
     #data_loss_op = tf.losses.mean_squared_error( actions_one_hot, logits, weights, scope='loss')/total
     if reg_loss_op is None:

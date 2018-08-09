@@ -579,7 +579,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       print outss
 
       feed_dict[m.train_ops['batch_norm_is_training_op']] = True
-      outss = sess.run([m.train_ops['step'],m.action_logits_op_pre], feed_dict=feed_dict)
+      outss = sess.run([m.train_ops['step'],m.action_logits_op_pre, m.input_tensors['train']['action']], feed_dict=feed_dict)
       print(outss)
       
       if np.mod(n_step, train_display_interval) == 0:

@@ -361,10 +361,10 @@ def _test(args):
             vals, _ = tf_utils.train_step_custom_online_sampling(
                 sess, None, m.global_step_op, train_step_kwargs,
                 mode=args.control.test_mode)
-            should_stop = False
+            should_stop = True
 
-            if checkpoint_iter >= args.solver.max_steps: 
-              should_stop = True
+            #if checkpoint_iter >= args.solver.max_steps: 
+            #  should_stop = True
 
             if should_stop:
               break

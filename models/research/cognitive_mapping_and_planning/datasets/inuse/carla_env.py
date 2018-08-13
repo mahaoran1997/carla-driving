@@ -108,6 +108,7 @@ def find_valid_episode_position(positions, waypointer, rng, difficulty):
     debugging = False
 
     found_match = False
+    turn = rng.rand() < 0.7
     while not found_match:
         index_start = rng.choice(range(len(positions))) #np.random.randint(len(positions))
         start_pos = positions[index_start]
@@ -118,13 +119,16 @@ def find_valid_episode_position(positions, waypointer, rng, difficulty):
         if not far:
             index_goals = []
             for i in range(len(positions)):
-                tmp_pos =positions[i]  
-                dis = sldist([start_pos.location.x,start_pos.location.y],[tmp_pos.location.x,tmp_pos.location.y])
-                angle1 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.orientation.x,tmp_pos.orientation.y)
-                angle2 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.location.x-start_pos.location.x,tmp_pos.location.y-start_pos.location.y)
-                if i != index_start and angle1 > -0.7 and angle2 > -0.7 and dis>1000.0 and dis <= difficulty:
-                    index_goals.append(i)
-
+                if i != index_start:
+                    tmp_pos =positions[i]  
+                    dis = sldist([start_pos.location.x,start_pos.location.y],[tmp_pos.location.x,tmp_pos.location.y])
+                    rec_dis = abs(start_pos.location.x - tmp_pos.location.x) + abs(start_pos.location.y - tmp_pos.location.y)
+                    angle1 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.orientation.x,tmp_pos.orientation.y)
+                    angle2 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.location.x-start_pos.location.x,tmp_pos.location.y-start_pos.location.y)
+                    if angle1 > -0.7 and angle2 > 0.0 and dis>1000.0 and rec_dis <= difficulty and ((turn and angle2 < 0.9) or ((not turn) and angle2 > 0.9)):
+                        index_goals.append(i)
+            if len(index_goals) == 0:
+                continue
             index_goal = index_goals[rng.choice(range(len(index_goals)))]
         else:
             index_goal = rng.choice(range(len(positions))) #np.random.randint(len(positions))

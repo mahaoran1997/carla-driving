@@ -122,7 +122,7 @@ def _inputs(problem):
     
 
     inputs = []
-    inputs.append(('action', tf.int32, (problem.batch_size, None, problem.num_actions)))
+    inputs.append(('action', tf.float32, (problem.batch_size, None, problem.num_actions)))
     train_data, _ = tf_utils.setup_inputs(inputs)
     train_data.update(step_input_data)
     train_data.update(common_input_data)
@@ -226,7 +226,7 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
     init_var = np.sqrt(2.0/(ks**2)/neurons)
     batch_norm_param = mapper_arch.batch_norm_param
     batch_norm_param['is_training'] = batch_norm_is_training_op
-    batch_norm_param['decay'] = 0.99 #mhr: 0.999
+    batch_norm_param['decay'] = 0.95 #mhr: 0.999
     print('adfasdf')
     print(x.get_shape().as_list())
     out.conv_feat = slim.conv2d(x, neurons, kernel_size=ks, stride=1,
@@ -244,7 +244,7 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
     fc_batch_norm_param = {'center': True, 'scale': True, 
                            'activation_fn':tf.nn.relu,
                            'is_training': batch_norm_is_training_op,
-                           'decay' : 0.99} #mhr: 0.9
+                           'decay' : 0.95} #mhr: 0.9
     f = out.reshape_conv_feat
     out_neurons = (mapper_arch.fc_out_size**2)*mapper_arch.fc_out_neurons
     neurons = mapper_arch.fc_neurons + [out_neurons]
@@ -411,6 +411,8 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
          is_training=batch_norm_is_training_op, name='fr',
          wt_decay=args.solver.wt_decay, stride=args.arch.fr_stride)
 
+      print(fr_op.get_shape().as_list())
+
       # Do Value Iteration on the fR
       if args.arch.vin_num_iters > 0:
         value_op, value_intermediate_op = value_iteration_network(
@@ -422,6 +424,8 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
       else:
         value_op = fr_op
         value_intermediate_op = []
+      
+      print(value_op.get_shape().as_list())
 
       # Crop out and upsample the previous value map.
       remove = args.arch.crop_remove_each
@@ -464,7 +468,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
     batch_norm_param = args.arch.pred_batch_norm_param
     if batch_norm_param is not None:
       batch_norm_param['is_training'] = batch_norm_is_training_op
-      batch_norm_param['decay'] = 0.99 #mhr: 0.9
+      batch_norm_param['decay'] = 0.95 #mhr: 0.9
     m.action_logits_op_pre, _ = tf_utils.fc_network(
         m.value_features_op, neurons=args.arch.pred_neurons,
         wt_decay=args.solver.wt_decay, name='pred', offset=0,

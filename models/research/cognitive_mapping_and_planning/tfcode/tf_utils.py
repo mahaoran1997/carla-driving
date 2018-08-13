@@ -57,7 +57,7 @@ def custom_residual_block(x, neurons, kernel_size, stride, name, is_training,
       batch_norm_param = {'center': True, 'scale': False, 
                           'activation_fn':tf.nn.relu, 
                           'is_training': is_training}
-    batch_norm_param['decay'] = 0.99 #mhr: 0.9
+    batch_norm_param['decay'] = 0.95 #mhr: 0.9
     y = slim.batch_norm(x, scope=name+'_bn', **batch_norm_param)
 
     y = conv_fn(y, num_outputs=neurons, kernel_size=kernel_size, stride=stride,
@@ -241,7 +241,7 @@ def fc_network(x, neurons, wt_decay, name, num_pred=None, offset=0,
   for i, neuron in enumerate(neurons):
     init_var = np.sqrt(2.0/neuron)
     if batch_norm_param is not None:
-      batch_norm_param['decay'] = 0.99 #mhr: 0.9
+      batch_norm_param['decay'] = 0.95 #mhr: 0.9
       x = slim.fully_connected(x, neuron, activation_fn=None,
                                weights_initializer=tf.random_normal_initializer(stddev=init_var),
                                weights_regularizer=slim.l2_regularizer(wt_decay),
@@ -435,18 +435,14 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 
     net_state_to_input.append(net_state)
 
-
-    #outpkl = {}
-    #outpkl['feed_dict'] =[]
-    #fpkl = outpkl['feed_dict']
-    '''fpkl['ego_goal_imgs_0'] = []
-    fpkl['ego_goal_imgs_1'] = []
-    fpkl['ego_goal_imgs_2'] = []'''
     n_step = sess.run(global_step)
     if not os.path.exists(logdir+"/logfiles/"+str(n_step)):
       os.makedirs(logdir+"/logfiles/"+str(n_step))
       #outputfile = open(logdir+"/logfiles/"+str(n_step)+".pkl", "w")
     output_file = open(logdir+"/logfiles/"+str(n_step)+"/output.txt", "w")
+    output_file.write("Goals")
+    output_file.write(str(input['goal_loc']))
+    output_file.write("Steps")
     for j in range(num_steps):
       #rec = {}
       print ('num_step: {:d}'.format(j))
@@ -475,7 +471,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       Image.fromarray(np.uint8(sum_num_0)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_sum_num_0.jpg")
       Image.fromarray(np.uint8(sum_num_1)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_sum_num_1.jpg")
       Image.fromarray(np.uint8(sum_num_2)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_sum_num_2.jpg")
-      
+      output_file.write(str(f['loc_on_map']))
       output_file.write(str(f['incremental_locs']))
       output_file.write(str(f['incremental_thetas']))
       #f = e.pre_features(f)
@@ -496,7 +492,8 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
                        m.train_ops['step_data_cache'],
                        m.train_ops['updated_state'],
-                       m.train_ops['outputs'],  m.action_logits_op_pre], feed_dict=feed_dict)
+                       m.train_ops['outputs'],  m.action_logits_op_pre, m.value_ops[0], m.value_ops[1],
+                       m.value_ops[2], m.fr_ops[0], m.fr_ops[1], m.fr_ops[2]] , feed_dict=feed_dict)
       '''m.ego_map_ops, m.coverage_ops,'''
       action_probs = outs[0]
       sample_gt_prob = outs[1]
@@ -507,6 +504,24 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       print ("----------------outs-----------------")
       print action_probs
       print (outs[5])
+
+      fr_0 = outs[9][0,  :, :, :3] * 255.0 + 128.0
+      fr_1 = outs[10][0,  :, :, :3] * 255.0 + 128.0
+      fr_2 = outs[11][0,  :, :, :3] * 255.0 + 128.0
+
+      Image.fromarray(np.uint8(fr_0)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_fr_0.jpg")
+      Image.fromarray(np.uint8(fr_1)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_fr_1.jpg")
+      Image.fromarray(np.uint8(fr_2)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_fr_2.jpg")
+      
+
+      vin_0 = outs[6][0,  :, :, :] * 255.0 + 128.0
+      vin_1 = outs[7][0,  :, :, :] * 255.0 + 128.0
+      vin_2 = outs[8][0,  :, :, :] * 255.0 + 128.0
+
+      Image.fromarray(np.uint8(vin_0)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_vin_0.jpg")
+      Image.fromarray(np.uint8(vin_1)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_vin_1.jpg")
+      Image.fromarray(np.uint8(vin_2)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_vin_2.jpg")
+      
       #print (outs[6])
       # outs
       #fpkl.append(rec)
@@ -563,8 +578,10 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
     dict_train.update({'rewards': rewards, 
                        'action_sample_wts': action_sample_wts,
                        'executed_actions': executed_actions})
+    
+    #print dict_train
     feed_dict = prepare_feed_dict(m.input_tensors['train'], dict_train)
-    print feed_dict['action']
+    #print feed_dict[m.input_tensors['train']['action']]
     #print feed_dict['rewards']
 
     for x in m.train_ops['step_data_cache']:
@@ -635,6 +652,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
     should_stop = None
   
   return total_loss, should_stop
+
 
 def train_step_custom_v2(sess, train_op, global_step, train_step_kwargs,
                          mode='train'):
@@ -730,6 +748,8 @@ def train_step_custom_v2(sess, train_op, global_step, train_step_kwargs,
     should_stop = None
 
   return total_loss, should_stop
+
+
 
 def train_step_custom(sess, train_op, global_step, train_step_kwargs, 
                       mode='train'):

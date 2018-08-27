@@ -21,10 +21,14 @@ Usage:
     --config_name cmp.lmap_Msc.clip5.sbpd_d_r2r+bench_test \
     --logdir output/cmp.lmap_Msc.clip5.sbpd_d_r2r
 
+  CUDA_VISIBLE_DEVICES=5 PYTHONPATH='.' PYOPENGL_PLATFORM=egl python scripts/script_nav_agent_release.py \
+    --config_name cmp.lmap_Msc.clip5.sbpd_rgb_r2r+bench_test \
+    --logdir output/cmp.lmap_Msc.clip5.sbpd_rgb_r2r_new36
+
   2. Training a model (locally).
-  CUDA_VISIBLE_DEVICES=0 PYTHONPATH='.' PYOPENGL_PLATFORM=egl python scripts/script_nav_agent_release.py \
-    --config_name cmp.lmap_Msc.clip5.sbpd_d_r2r+train_train \
-    --logdir output/cmp.lmap_Msc.clip5.sbpd_d_r2r_
+  CUDA_VISIBLE_DEVICES=1 PYTHONPATH='.' PYOPENGL_PLATFORM=egl python scripts/script_nav_agent_release.py \
+    --config_name cmp.lmap_Msc.clip5.sbpd_rgb_r2r+train_train \
+    --logdir output/cmp.lmap_Msc.clip5.sbpd_rgb_r2r_new
 
   3. Training a model (distributed).
   # See https://www.tensorflow.org/deploy/distributed on how to setup distributed
@@ -55,7 +59,8 @@ from tensorflow.python.platform import app
 from tensorflow.python.platform import flags
 from cfgs import config_cmp
 from cfgs import config_vision_baseline
-import datasets.nav_env as nav_env
+#import datasets.nav_env as nav_env
+print("zxc")
 import src.file_utils as fu 
 import src.utils as utils
 import tfcode.cmp as cmp 
@@ -75,7 +80,8 @@ def concat_state_x(f, names):
     # af[k] = np.swapaxes(af[k], 0, 1)
   return af
 
-logdir = 'output/cmp.lmap_Msc.clip5.sbpd_rgb_r2r_new32'
+
+logdir = '57'
 iter = 0
 rng_data = [np.random.RandomState(0), np.random.RandomState(0)]
 train_step_kwargs={}
@@ -101,22 +107,6 @@ while True:
   states.append(init_env_state)
   for i in range(80):
     f = e.get_features(states[i], i)
-    goal_img_0_pre = np.sum(f['ego_goal_imgs_0'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
-    goal_img_0 = np.concatenate((goal_img_0_pre, goal_img_0_pre, goal_img_0_pre), 2)
-    goal_img_1_pre = np.sum(f['ego_goal_imgs_1'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
-    goal_img_1 = np.concatenate((goal_img_1_pre, goal_img_1_pre, goal_img_1_pre), 2)
-    goal_img_2_pre = np.sum(f['ego_goal_imgs_2'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
-    goal_img_2 = np.concatenate((goal_img_2_pre, goal_img_2_pre, goal_img_2_pre), 2)
-    
-    #Image.fromarray(goal_img_0.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_0.jpg")
-    #Image.fromarray(goal_img_1.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_1.jpg")
-    #Image.fromarray(goal_img_2.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_2.jpg")
-    
-    #print(np.uint8(goal_img_0))
-    Image.fromarray(np.uint8(goal_img_0)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(i)+"_goal_img_0.jpg")
-    Image.fromarray(np.uint8(goal_img_1)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(i)+"_goal_img_1.jpg")
-    Image.fromarray(np.uint8(goal_img_2)).save(logdir+"/logfiles/"+str(n_step)+"/"+str(i)+"_goal_img_2.jpg")
-    #print(f['ego_goal_imgs_0'])
     optimal_action = e.get_optimal_action(states[i], i)
     state_targets.append(e.get_targets(states[i], i))
     print('----optimal-----')
@@ -227,7 +217,7 @@ def _train(args):
   container_name = ""
 
   #R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
-  R = lambda: CarlaEnvMultiplexer(args.logdir)
+  R = lambda: CarlaEnvMultiplexer('trainlog/'+args.logdir[-2:]+'/trainimgs')
 
   
   
@@ -302,7 +292,7 @@ def _test(args):
 
   #R = lambda: nav_env.get_multiplexer_class(args.navtask, rng_data_seed)
   
-  R = lambda: CarlaEnvMultiplexer()
+  R = lambda: CarlaEnvMultiplexer('testlog/'+args.logdir[-2:]+'/testimgs')
 
 
 
@@ -332,8 +322,11 @@ def _test(args):
       while True:
         last_checkpoint_ = None
         while last_checkpoint_ is None:
-          last_checkpoint_ = slim.evaluation.wait_for_new_checkpoint(
-            checkpoint_dir, last_checkpoint, seconds_to_sleep=10, timeout=60)
+          #last_checkpoint_ = slim.evaluation.wait_for_new_checkpoint(
+          #  checkpoint_dir, last_checkpoint, seconds_to_sleep=10, timeout=60)
+          #print(last_checkpoint_)
+          last_checkpoint_ = 'output/cmp.lmap_Msc.clip5.sbpd_rgb_r2r_new50/model.ckpt-1290'
+          print(last_checkpoint_)
         if last_checkpoint_ is None: break
 
         last_checkpoint = last_checkpoint_
@@ -358,7 +351,7 @@ def _test(args):
               train_step_kwargs['rng_data'] = [np.random.RandomState(rng_data_seed),
                                                np.random.RandomState(rng_data_seed)]
               train_step_kwargs['rng_action'] = np.random.RandomState(rng_action_seed)
-            vals, _ = tf_utils.train_step_custom_online_sampling(
+            vals, _ = tf_utils.test_step_custom_online_sampling(
                 sess, None, m.global_step_op, train_step_kwargs,
                 mode=args.control.test_mode)
             should_stop = True

@@ -46,7 +46,7 @@ def adjust_args_for_mode(args, mode):
   elif mode == 'bench':
     # Actually testing the agent in settings that are kept same between
     # different runs.
-    args.navtask.task_params.batch_size = 16
+    args.navtask.task_params.batch_size = 1
     args.control.test = True
     args.arch.action_sample_type = 'argmax'
     args.arch.sample_gt_prob_type = 'zero'
@@ -65,11 +65,11 @@ def adjust_args_for_mode(args, mode):
 def get_solver_vars(solver_str):
   if solver_str == '': vals = []; 
   else: vals = solver_str.split('_')
-  ks = ['clip', 'dlw', 'long', 'typ', 'isdk', 'adam_eps', 'init_lr'];
+  ks = ['clip', 'dlw', 'long', 'typ', 'isdk', 'adam_eps', 'init_lr']
   ks = ks[:len(vals)]
 
   # Gradient clipping or not.
-  if len(vals) == 0: ks.append('clip'); vals.append('noclip');
+  if len(vals) == 0: ks.append('clip'); vals.append('noclip')
   # data loss weight.
   if len(vals) == 1: ks.append('dlw');  vals.append('dlw20')
   # how long to train for.

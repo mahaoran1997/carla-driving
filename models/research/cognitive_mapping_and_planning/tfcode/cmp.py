@@ -107,6 +107,7 @@ def _inputs(problem):
                    (problem.batch_size, None, 2)))
     inputs.append(('incremental_thetas', tf.float32, 
                    (problem.batch_size, None, 2)))   #!!!mhr: 1->2
+    inputs.append(('measurements', tf.float32, (problem.batch_size, None, 3)))  #!!!!mhr: new adding
     inputs.append(('step_number', tf.int32, (1, None, 1)))
     inputs.append(('node_ids', tf.int32, (problem.batch_size, None,
                                           problem.node_ids_dim)))
@@ -330,6 +331,8 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
         paddings_op = tf.constant(paddings, dtype=tf.int32)
         m.ego_map_ops[i] = tf.pad(m.ego_map_ops[i], paddings=paddings_op)
         m.coverage_ops[i] = tf.pad(m.coverage_ops[i], paddings=paddings_op)
+        #print(m.ego_map_ops[i].get_shape().as_list())
+    
   
   elif task_params.input_type == 'analytical_counts':
     m.ego_map_ops = []; m.coverage_ops = []
@@ -390,6 +393,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
 
       # Concat occupancy, how much occupied and goal.
       with tf.name_scope('concat'):
+        print(occupancy.get_shape().as_list())
         sh = [-1, map_crop_size, map_crop_size, task_params.map_channels]
         occupancy = tf.reshape(occupancy, shape=sh)
         conf = tf.reshape(conf, shape=sh)
@@ -401,6 +405,9 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
         if previous_value_op is not None:
           to_concat.append(previous_value_op)
 
+        print('debug:')
+        for e in to_concat:
+          print(e.get_shape().as_list())
         x = tf.concat(to_concat, 3)
 
       # Pass the map, previous rewards and the goal through a few convolutional
@@ -433,6 +440,8 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
         crop_value_op = value_op[:, remove:-remove, remove:-remove,:]
       else:
         crop_value_op = value_op
+      print('crop_value_op')
+      print(crop_value_op.get_shape().as_list())
       crop_value_op = tf.reshape(crop_value_op, shape=[-1, args.arch.value_crop_size,
                                                        args.arch.value_crop_size,
                                                        args.arch.vin_val_neurons])
@@ -469,11 +478,14 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
     if batch_norm_param is not None:
       batch_norm_param['is_training'] = batch_norm_is_training_op
       batch_norm_param['decay'] = 0.95 #mhr: 0.9
+    
+    #m.incorp = tf.concat(m.value_features_op)
+    measurements = tf.reshape(m.input_tensors['step']['measurements'], [-1,3])
     m.action_logits_op_pre, _ = tf_utils.fc_network(
         m.value_features_op, neurons=args.arch.pred_neurons,
         wt_decay=args.solver.wt_decay, name='pred', offset=0,
         num_pred=task_params.num_actions, 
-        batch_norm_param=batch_norm_param) #mhr:!!!!!!! num_actions: 4->3
+        batch_norm_param=batch_norm_param, incorp=measurements) #mhr:!!!!!!! num_actions: 4->3
 
     print(m.action_logits_op_pre.get_shape().as_list())
     steer_pre, throttle_brake_pre = tf.split(m.action_logits_op_pre, [1,2], axis = 1)
@@ -520,12 +532,14 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
       m.readout_maps_logits = tf.reshape(readout_maps, gt_shape)
       m.readout_maps_probs = tf.reshape(probs, gt_shape)
 
+      print('----------readout--------------')
+      print(m.readout_maps_logits.get_shape().as_list())
       # Add a loss op
       m.readout_maps_loss_op = tf.losses.sigmoid_cross_entropy(
           tf.reshape(m.readout_maps_gt, [-1, len(task_params.readout_maps_crop_sizes)]), 
           tf.reshape(readout_maps, [-1, len(task_params.readout_maps_crop_sizes)]),
           scope='loss')
-      m.readout_maps_loss_op = 10.*m.readout_maps_loss_op
+      m.readout_maps_loss_op = 1000.*m.readout_maps_loss_op
 
   ewma_decay = 0.99 if is_training else 0.0
 

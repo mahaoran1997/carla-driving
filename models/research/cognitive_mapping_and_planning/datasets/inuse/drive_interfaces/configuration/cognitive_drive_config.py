@@ -30,8 +30,8 @@ class configDrive:
     self.cars = 0  #50
     self.pedestrians = 0 #500
     self.typ = 'rgb'
-    self.map_scales = [0.00125, 0.0025, 0.005] #[0.03125, 0.0625, 0.125]
-    self.map_crop_sizes = [16, 16, 16]
+    self.map_scales = [0.0025, 0.005, 0.01] #[0.03125, 0.0625, 0.125]
+    self.map_crop_sizes = [32, 32, 32]
     self.n_ori = 4
 
     self.reward_at_goal = 1.0

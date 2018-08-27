@@ -63,7 +63,7 @@ def get_default_cmp_args():
       layers_per_block=None)
 
   arch_args = utils.Foo(
-      vin_val_neurons=8, vin_action_neurons=8, vin_ks=3, vin_share_wts=False,
+      vin_val_neurons=8, vin_action_neurons=8, vin_ks=7, vin_share_wts=False,
       pred_neurons=[64, 64], pred_batch_norm_param=batch_norm_param,
       conv_on_value_map=0, fr_neurons=16, fr_ver='v2', fr_inside_neurons=64,
       fr_stride=1, crop_remove_each=30, value_crop_size=4,
@@ -150,17 +150,19 @@ def process_arch_learned_map(args, arch_vars):
         arch_vars.var2 == 'MscROMss' or arch_vars.var2 == 'MscNoVin'):
     # Code for multi-scale planner.
     args.arch.vin_num_iters = 10  #mhr: 8
-    args.arch.crop_remove_each = 4
-    args.arch.value_crop_size = 8
+    args.arch.crop_remove_each = 8
+    args.arch.value_crop_size = 16
 
-    sc = 1./args.navtask.task_params.step_size
+    sc = 1./args.navtask.task_params.step_size       
+    #mhr step_size == 8
     max_dist = args.navtask.task_params.max_dist * \
         args.navtask.task_params.num_goals
+    #mhr: max_dist == 32
     n_scales = np.log2(float(max_dist) / float(args.arch.vin_num_iters))
     n_scales = int(np.ceil(n_scales)+1)
 
-    args.navtask.task_params.map_scales = [0.00125, 0.0025, 0.005] #list(sc*(0.5**(np.arange(n_scales))[::-1]))
-    args.navtask.task_params.map_crop_sizes = [16 for x in range(n_scales)]
+    args.navtask.task_params.map_scales = [0.0025, 0.005, 0.01] #list(sc*(0.5**(np.arange(n_scales))[::-1]))
+    args.navtask.task_params.map_crop_sizes = [32 for x in range(n_scales)]
 
     args.arch.fr_stride = 1
     args.arch.vin_action_neurons = 8
@@ -169,7 +171,7 @@ def process_arch_learned_map(args, arch_vars):
 
     args.mapper_arch.pad_map_with_zeros_each = [0 for _ in range(n_scales)]
     args.mapper_arch.deconv_neurons = [64*n_scales, 32*n_scales, 16*n_scales]
-    args.mapper_arch.deconv_strides = [1, 2, 1]
+    args.mapper_arch.deconv_strides = [1, 2, 2]
 
     if arch_vars.var2 == 'MscNoVin':
       # No planning version.

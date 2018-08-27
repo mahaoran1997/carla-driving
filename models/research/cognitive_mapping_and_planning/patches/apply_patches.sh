@@ -14,5 +14,5 @@
 # ==============================================================================
 
 echo $VIRTUAL_ENV
-patch $VIRTUAL_ENV/lib/python2.7/site-packages/OpenGL/GLES2/VERSION/GLES2_2_0.py patches/GLES2_2_0.py.patch
-patch $VIRTUAL_ENV/lib/python2.7/site-packages/OpenGL/platform/ctypesloader.py patches/ctypesloader.py.patch
+patch /home/yang/anaconda2/envs/python2/site-packages/OpenGL/GLES2/VERSION/GLES2_2_0.py patches/GLES2_2_0.py.patch
+patch /home/yang/anaconda2/envs/python2/site-packages/OpenGL/platform/ctypesloader.py patches/ctypesloader.py.patch

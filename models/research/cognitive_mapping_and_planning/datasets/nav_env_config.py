@@ -19,7 +19,7 @@ Base config for stanford navigation enviornment.
 """
 import numpy as np
 import src.utils as utils
-import datasets.nav_env as nav_env
+#import datasets.nav_env as nav_env
 
 def nav_env_base_config():
   """Returns the base config for stanford navigation environment.
@@ -117,7 +117,7 @@ def nav_env_base_config():
 
   navtask_args = utils.Foo(
       building_names=['area1_gates_wingA_floor1_westpart'],
-      env_class=nav_env.VisualNavigationEnv,
+      #env_class=nav_env.VisualNavigationEnv,
       robot=robot,
       task_params=task_params,
       env=env,

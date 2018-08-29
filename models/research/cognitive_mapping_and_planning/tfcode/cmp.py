@@ -94,19 +94,23 @@ def _inputs(problem):
                        problem.readout_maps_crop_sizes[i],
                        problem.readout_maps_channels)))
 
-    for i in range(len(problem.map_crop_sizes)):
+    '''for i in range(len(problem.map_crop_sizes)):
       inputs.append(('ego_goal_imgs_{:d}'.format(i), tf.float32, 
                     (problem.batch_size, None, problem.map_crop_sizes[i],
-                     problem.map_crop_sizes[i], problem.goal_channels)))
-      for s in ['sum_num', 'sum_denom', 'max_denom']:
-        inputs.append(('running_'+s+'_{:d}'.format(i), tf.float32,
-                       (problem.batch_size, 1, problem.map_crop_sizes[i],
-                        problem.map_crop_sizes[i], problem.map_channels)))
+                     problem.map_crop_sizes[i], problem.goal_channels)))'''
+    for s in ['sum_num', 'sum_denom', 'max_denom']:
+      inputs.append(('running_'+s, tf.float32,
+                      (problem.batch_size, 1, problem.map_crop_sizes[0],
+                      problem.map_crop_sizes[0], problem.map_channels)))
 
     inputs.append(('incremental_locs', tf.float32, 
                    (problem.batch_size, None, 2)))
     inputs.append(('incremental_thetas', tf.float32, 
                    (problem.batch_size, None, 2)))   #!!!mhr: 1->2
+
+
+    inputs.append(('command', tf.float32, (problem.batch_size, None, 4)))
+    inputs.append(('speed', tf.float32, (problem.batch_size, None, 1)))  #!!!!mhr: new adding
     inputs.append(('measurements', tf.float32, (problem.batch_size, None, 3)))  #!!!!mhr: new adding
     inputs.append(('step_number', tf.int32, (1, None, 1)))
     inputs.append(('node_ids', tf.int32, (problem.batch_size, None,
@@ -276,12 +280,154 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
   # through a sigmoid.
   if split_maps:
     with tf.name_scope('split'):
-      out_all = tf.split(value=x, axis=4, num_or_size_splits=2*num_maps)
-      out.fss_logits = out_all[:num_maps]
-      out.confs_logits = out_all[num_maps:]
+      out_all = tf.split(value=x, axis=4, num_or_size_splits=2)   #*num_maps
+      out.fss_logits = out_all[0]#[:num_maps]
+      out.confs_logits = out_all[1]#[num_maps:]
     with tf.name_scope('sigmoid'):
-      out.confs_probs = [tf.nn.sigmoid(x) for x in out.confs_logits]
+      out.confs_probs = tf.nn.sigmoid(out.confs_logits)
   return out
+
+
+
+
+
+
+
+
+
+#-----------------------------CIL---------------------------------------
+def weight_ones(shape, name):
+    initial = tf.constant(1.0, shape=shape, name=name)
+    return tf.Variable(initial)
+
+
+def weight_xavi_init(shape, name):
+    initial = tf.get_variable(name=name, shape=shape,
+                              initializer=tf.contrib.layers.xavier_initializer())
+    return initial
+
+
+def bias_variable(shape, name):
+    initial = tf.constant(0.1, shape=shape, name=name)
+    return tf.Variable(initial)
+
+
+class Network(object):
+
+    def __init__(self, dropout, image_shape):
+        """ We put a few counters to see how many times we called each function """
+        self._dropout_vec = dropout
+        self._image_shape = image_shape
+        self._count_conv = 0
+        self._count_pool = 0
+        self._count_bn = 0
+        self._count_activations = 0
+        self._count_dropouts = 0
+        self._count_fc = 0
+        self._count_lstm = 0
+        self._count_soft_max = 0
+        self._conv_kernels = []
+        self._conv_strides = []
+        self._weights = {}
+        self._features = {}
+
+    """ Our conv is currently using bias """
+
+    def conv(self, x, kernel_size, stride, output_size, padding_in='SAME'):
+        self._count_conv += 1
+
+        filters_in = x.get_shape()[-1]
+        shape = [kernel_size, kernel_size, filters_in, output_size]
+
+        weights = weight_xavi_init(shape, 'W_c_' + str(self._count_conv))
+        bias = bias_variable([output_size], name='B_c_' + str(self._count_conv))
+
+        self._weights['W_conv' + str(self._count_conv)] = weights
+        self._conv_kernels.append(kernel_size)
+        self._conv_strides.append(stride)
+
+        conv_res = tf.add(tf.nn.conv2d(x, weights, [1, stride, stride, 1], padding=padding_in,
+                                       name='conv2d_' + str(self._count_conv)), bias,
+                          name='add_' + str(self._count_conv))
+
+        self._features['conv_block' + str(self._count_conv - 1)] = conv_res
+
+        return conv_res
+
+    def max_pool(self, x, ksize=3, stride=2):
+        self._count_pool += 1
+        return tf.nn.max_pool(x, ksize=[1, ksize, ksize, 1], strides=[1, stride, stride, 1],
+                              padding='SAME', name='max_pool' + str(self._count_pool))
+
+    def bn(self, x):
+        self._count_bn += 1
+        return tf.contrib.layers.batch_norm(x, is_training=False,
+                                            updates_collections=None,
+                                            scope='bn' + str(self._count_bn))
+
+    def activation(self, x):
+        self._count_activations += 1
+        return tf.nn.relu(x, name='relu' + str(self._count_activations))
+
+    def dropout(self, x):
+        print("Dropout", self._count_dropouts)
+        self._count_dropouts += 1
+        output = tf.nn.dropout(x, self._dropout_vec[self._count_dropouts - 1],
+                               name='dropout' + str(self._count_dropouts))
+
+        return output
+
+    def fc(self, x, output_size):
+        self._count_fc += 1
+        filters_in = x.get_shape()[-1]
+        shape = [filters_in, output_size]
+
+        weights = weight_xavi_init(shape, 'W_f_' + str(self._count_fc))
+        bias = bias_variable([output_size], name='B_f_' + str(self._count_fc))
+
+        return tf.nn.xw_plus_b(x, weights, bias, name='fc_' + str(self._count_fc))
+
+    def conv_block(self, x, kernel_size, stride, output_size, padding_in='SAME'):
+        print(" === Conv", self._count_conv, "  :  ", kernel_size, stride, output_size)
+        with tf.name_scope("conv_block" + str(self._count_conv)):
+            x = self.conv(x, kernel_size, stride, output_size, padding_in=padding_in)
+            x = self.bn(x)
+            x = self.dropout(x)
+
+            return self.activation(x)
+
+    def fc_block(self, x, output_size):
+        print(" === FC", self._count_fc, "  :  ", output_size)
+        with tf.name_scope("fc" + str(self._count_fc + 1)):
+            x = self.fc(x, output_size)
+            x = self.dropout(x)
+            self._features['fc_block' + str(self._count_fc + 1)] = x
+            return self.activation(x)
+
+    def get_weigths_dict(self):
+        return self._weights
+
+    def get_feat_tensors_dict(self):
+        return self._features
+
+
+
+
+
+
+
+#-----------------------------CIL---------------------------------------
+
+
+
+
+
+
+
+
+
+
+
 
 def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   assert(args.arch.multi_scale), 'removed support for old single scale code.'
@@ -324,28 +470,17 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
     m.coverage_ops = m.vision_ops.confs_probs
     
     # Zero pad these to make them same size as what the planner expects.
-    for i in range(len(m.ego_map_ops)):
-      if args.mapper_arch.pad_map_with_zeros_each[i] > 0:
-        paddings = np.zeros((5,2), dtype=np.int32)
-        paddings[2:4,:] = args.mapper_arch.pad_map_with_zeros_each[i]
-        paddings_op = tf.constant(paddings, dtype=tf.int32)
-        m.ego_map_ops[i] = tf.pad(m.ego_map_ops[i], paddings=paddings_op)
-        m.coverage_ops[i] = tf.pad(m.coverage_ops[i], paddings=paddings_op)
+    #for i in range(len(m.ego_map_ops)):
+    #32*32*24 
+    #i = 0
+    if args.mapper_arch.pad_map_with_zeros_each[0] > 0:
+      paddings = np.zeros((5,2), dtype=np.int32)
+      paddings[2:4,:] = args.mapper_arch.pad_map_with_zeros_each[0]
+      paddings_op = tf.constant(paddings, dtype=tf.int32)
+      m.ego_map_ops = tf.pad(m.ego_map_ops, paddings=paddings_op)
+      m.coverage_ops = tf.pad(m.coverage_ops, paddings=paddings_op)
         #print(m.ego_map_ops[i].get_shape().as_list())
-    
-  
-  elif task_params.input_type == 'analytical_counts':
-    m.ego_map_ops = []; m.coverage_ops = []
-    for i in range(len(task_params.map_crop_sizes)):
-      ego_map_op = m.input_tensors['step']['analytical_counts_{:d}'.format(i)]
-      coverage_op = tf.cast(tf.greater_equal(
-          tf.reduce_max(ego_map_op, reduction_indices=[4],
-                        keep_dims=True), 1), tf.float32)
-      coverage_op = tf.ones_like(ego_map_op) * coverage_op
-      m.ego_map_ops.append(ego_map_op)
-      m.coverage_ops.append(coverage_op)
-      m.train_ops['step_data_cache'] = []
-  
+
   num_steps = task_params.num_steps
   num_goals = task_params.num_goals
 
@@ -354,151 +489,132 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
     map_crop_size_ops.append(tf.constant(map_crop_size, dtype=tf.int32, shape=(2,)))
 
   with tf.name_scope('check_size'):
-    is_single_step = tf.equal(tf.unstack(tf.shape(m.ego_map_ops[0]), num=5)[1], 1)
+    is_single_step = tf.equal(tf.unstack(tf.shape(m.ego_map_ops), num=5)[1], 1)
 
-  fr_ops = []; value_ops = [];
-  fr_intermediate_ops = []; value_intermediate_ops = [];
-  crop_value_ops = [];
-  resize_crop_value_ops = [];
-  confs = []; occupancys = [];
+  fr_ops = []; value_ops = []
+  fr_intermediate_ops = []; value_intermediate_ops = []
+  crop_value_ops = []
+  resize_crop_value_ops = []
+  confs = []; occupancys = []
 
-  previous_value_op = None
-  updated_state = []; state_names = [];
-
-  for i in range(len(task_params.map_crop_sizes)):
-    map_crop_size = task_params.map_crop_sizes[i]
-    with tf.variable_scope('scale_{:d}'.format(i)): 
-      # Accumulate the map.
-      fn = lambda ns: running_combine(
-             m.ego_map_ops[i],
-             m.coverage_ops[i],
-             m.input_tensors['step']['incremental_locs'] * task_params.map_scales[i],
-             m.input_tensors['step']['incremental_thetas'],
-             m.input_tensors['step']['running_sum_num_{:d}'.format(i)],
-             m.input_tensors['step']['running_sum_denom_{:d}'.format(i)],
-             m.input_tensors['step']['running_max_denom_{:d}'.format(i)],
-             map_crop_size, ns)
-
-      running_sum_num, running_sum_denom, running_max_denom = \
-          tf.cond(is_single_step, lambda: fn(1), lambda: fn(num_steps*num_goals))
-      updated_state += [running_sum_num, running_sum_denom, running_max_denom]
-      state_names += ['running_sum_num_{:d}'.format(i),
-                      'running_sum_denom_{:d}'.format(i),
-                      'running_max_denom_{:d}'.format(i)]
-
-      # Concat the accumulated map and goal
-      occupancy = running_sum_num / tf.maximum(running_sum_denom, 0.001)
-      conf = running_max_denom
-      # print occupancy.get_shape().as_list()
-
-      # Concat occupancy, how much occupied and goal.
-      with tf.name_scope('concat'):
-        print(occupancy.get_shape().as_list())
-        sh = [-1, map_crop_size, map_crop_size, task_params.map_channels]
-        occupancy = tf.reshape(occupancy, shape=sh)
-        conf = tf.reshape(conf, shape=sh)
-
-        sh = [-1, map_crop_size, map_crop_size, task_params.goal_channels]
-        goal = tf.reshape(m.input_tensors['step']['ego_goal_imgs_{:d}'.format(i)], shape=sh)
-        to_concat = [occupancy, conf, goal]
-
-        if previous_value_op is not None:
-          to_concat.append(previous_value_op)
-
-        print('debug:')
-        for e in to_concat:
-          print(e.get_shape().as_list())
-        x = tf.concat(to_concat, 3)
-
-      # Pass the map, previous rewards and the goal through a few convolutional
-      # layers to get fR.
-      fr_op, fr_intermediate_op = fr_v2(
-         x, output_neurons=args.arch.fr_neurons,
-         inside_neurons=args.arch.fr_inside_neurons,
-         is_training=batch_norm_is_training_op, name='fr',
-         wt_decay=args.solver.wt_decay, stride=args.arch.fr_stride)
-
-      print(fr_op.get_shape().as_list())
-
-      # Do Value Iteration on the fR
-      if args.arch.vin_num_iters > 0:
-        value_op, value_intermediate_op = value_iteration_network(
-            fr_op, num_iters=args.arch.vin_num_iters,
-            val_neurons=args.arch.vin_val_neurons,
-            action_neurons=args.arch.vin_action_neurons,
-            kernel_size=args.arch.vin_ks, share_wts=args.arch.vin_share_wts,
-            name='vin', wt_decay=args.solver.wt_decay)
-      else:
-        value_op = fr_op
-        value_intermediate_op = []
-      
-      print(value_op.get_shape().as_list())
-
-      # Crop out and upsample the previous value map.
-      remove = args.arch.crop_remove_each
-      if remove > 0:
-        crop_value_op = value_op[:, remove:-remove, remove:-remove,:]
-      else:
-        crop_value_op = value_op
-      print('crop_value_op')
-      print(crop_value_op.get_shape().as_list())
-      crop_value_op = tf.reshape(crop_value_op, shape=[-1, args.arch.value_crop_size,
-                                                       args.arch.value_crop_size,
-                                                       args.arch.vin_val_neurons])
-      if i < len(task_params.map_crop_sizes)-1:
-        # Reshape it to shape of the next scale.
-        previous_value_op = tf.image.resize_bilinear(crop_value_op,
-                                                     map_crop_size_ops[i+1],
-                                                     align_corners=True)
-        resize_crop_value_ops.append(previous_value_op)
-      
-      occupancys.append(occupancy)
-      confs.append(conf)
-      value_ops.append(value_op)
-      crop_value_ops.append(crop_value_op)
-      fr_ops.append(fr_op)
-      fr_intermediate_ops.append(fr_intermediate_op)
   
-  m.value_ops = value_ops
-  m.value_intermediate_ops = value_intermediate_ops
-  m.fr_ops = fr_ops
-  m.fr_intermediate_ops = fr_intermediate_ops
-  m.final_value_op = crop_value_op
-  m.crop_value_ops = crop_value_ops
-  m.resize_crop_value_ops = resize_crop_value_ops
-  m.confs = confs
-  m.occupancys = occupancys
+  updated_state = []; state_names = []
 
-  sh = [-1, args.arch.vin_val_neurons*((args.arch.value_crop_size)**2)]
-  m.value_features_op = tf.reshape(m.final_value_op, sh, name='reshape_value_op')
+  #for i in range(len(task_params.map_crop_sizes)):
+  map_crop_size = task_params.map_crop_sizes[0]
+  #with tf.variable_scope('scale_{:d}'.format(i)): 
+  # Accumulate the map.
+  fn = lambda ns: running_combine(
+          m.ego_map_ops,
+          m.coverage_ops,
+          m.input_tensors['step']['incremental_locs'] * task_params.map_scales[0],
+          m.input_tensors['step']['incremental_thetas'],
+          m.input_tensors['step']['running_sum_num'],
+          m.input_tensors['step']['running_sum_denom'],
+          m.input_tensors['step']['running_max_denom'],
+          map_crop_size, ns)
+
+  running_sum_num, running_sum_denom, running_max_denom = \
+      tf.cond(is_single_step, lambda: fn(1), lambda: fn(num_steps*num_goals))
+  updated_state += [running_sum_num, running_sum_denom, running_max_denom]
+  state_names += ['running_sum_num',
+                  'running_sum_denom',
+                  'running_max_denom']
+
+  # Concat the accumulated map and goal
+  occupancy = running_sum_num / tf.maximum(running_sum_denom, 0.001)
+  conf = running_max_denom
+  # print occupancy.get_shape().as_list()
+
+  # Concat occupancy, how much occupied and goal.
+  with tf.name_scope('concat'):
+    print(occupancy.get_shape().as_list())
+    sh = [-1, map_crop_size, map_crop_size, task_params.map_channels]
+    print('task_params.map_channels')
+    print(task_params.map_channels)
+    occupancy = tf.reshape(occupancy, shape=sh)
+    conf = tf.reshape(conf, shape=sh)
+
+    #sh = [-1, map_crop_size, map_crop_size, task_params.goal_channels]
+    #goal = tf.reshape(m.input_tensors['step']['ego_goal_imgs_{:d}'.format(i)], shape=sh)
+    to_concat = [occupancy, conf]#, goal]
+
+
+    print('debug:')
+    for e in to_concat:
+      print(e.get_shape().as_list())
+    x = tf.concat(to_concat, 3)
+    #32*32*48
+
+  network_manager = Network(task_params.dropout_vec, tf.shape(x))
+
+  """conv1"""  # kernel sz, stride, num feature maps
+  xc = network_manager.conv_block(x, 5, 2, 32, padding_in='VALID')
+  print(xc)
+  xc = network_manager.conv_block(xc, 3, 1, 32, padding_in='VALID')
+  print(xc)
+
+  """conv2"""
+  xc = network_manager.conv_block(xc, 3, 2, 64, padding_in='VALID')
+  print(xc)
+  xc = network_manager.conv_block(xc, 3, 1, 64, padding_in='VALID')
+  print(xc)
+
+  """conv3"""
+  xc = network_manager.conv_block(xc, 3, 2, 128, padding_in='VALID')
+  print(xc)
+  xc = network_manager.conv_block(xc, 3, 1, 128, padding_in='VALID')
+  print(xc)
+
+  """conv4"""
+  xc = network_manager.conv_block(xc, 3, 1, 256, padding_in='VALID')
+  print(xc)
+  xc = network_manager.conv_block(xc, 3, 1, 256, padding_in='VALID')
+  print(xc)
+  """mp3 (default values)"""
+
+  """ reshape """
+  x = tf.reshape(xc, [-1, int(np.prod(xc.get_shape()[1:]))], name='reshape')
+  print(x)
+
+  """ fc1 """
+  x = network_manager.fc_block(x, 512)
+  print(x)
+  """ fc2 """
+  x = network_manager.fc_block(x, 512)
+
+  """Process Control"""
+
+  """ Speed (measurements)"""
+  with tf.name_scope("Speed"):
+      speed = tf.reshape(m.input_tensors['step']['speed'], [-1,1])#input_data[1]  # get the speed from input data
+      speed = network_manager.fc_block(speed, 128)
+      speed = network_manager.fc_block(speed, 128)
+
+  """ Joint sensory """
+  j = tf.concat([x, speed], 1)
+  j = network_manager.fc_block(j, 512)
+
+  """Start BRANCHING"""
+  branch_config = [["Steer", "Gas", "Brake"], ["Steer", "Gas", "Brake"], 
+                    ["Steer", "Gas", "Brake"], ["Steer", "Gas", "Brake"]]#, ["Speed"]]
   
-  # Determine what action to take.
-  with tf.variable_scope('action_pred'):
-    batch_norm_param = args.arch.pred_batch_norm_param
-    if batch_norm_param is not None:
-      batch_norm_param['is_training'] = batch_norm_is_training_op
-      batch_norm_param['decay'] = 0.95 #mhr: 0.9
-    
-    #m.incorp = tf.concat(m.value_features_op)
-    measurements = tf.reshape(m.input_tensors['step']['measurements'], [-1,3])
-    m.action_logits_op_pre, _ = tf_utils.fc_network(
-        m.value_features_op, neurons=args.arch.pred_neurons,
-        wt_decay=args.solver.wt_decay, name='pred', offset=0,
-        num_pred=task_params.num_actions, 
-        batch_norm_param=batch_norm_param, incorp=measurements) #mhr:!!!!!!! num_actions: 4->3
+  branches = []
+  for i in range(0, len(branch_config)):
+      with tf.name_scope("Branch_" + str(i)):
+          if branch_config[i][0] == "Speed":
+              # we only use the image as input to speed prediction
+              branch_output = network_manager.fc_block(x, 256)
+              branch_output = network_manager.fc_block(branch_output, 256)
+          else:
+              branch_output = network_manager.fc_block(j, 256)
+              branch_output = network_manager.fc_block(branch_output, 256)
 
-    print(m.action_logits_op_pre.get_shape().as_list())
-    steer_pre, throttle_brake_pre = tf.split(m.action_logits_op_pre, [1,2], axis = 1)
+          branches.append(network_manager.fc(branch_output, len(branch_config[i])))
 
-    steer = tf.tanh(steer_pre)
-    throttle_brake = tf.sigmoid(throttle_brake_pre)
-    m.action_logits_op = tf.concat([steer, throttle_brake], axis = 1)
+      print(branch_output)
 
-    print(steer.get_shape().as_list())
-    print(throttle_brake.get_shape().as_list())
-    print(m.action_logits_op.get_shape().as_list())
-    #m.action_logits_op = m.action_logits_op_pre
-    #m.action_prob_op = tf.nn.softmax(m.action_logits_op)
+  m.action_logits_op_vec = branches
 
   init_state = tf.constant(0., dtype=tf.float32, shape=[
       task_params.batch_size, 1, map_crop_size, map_crop_size,
@@ -508,11 +624,11 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   m.train_ops['updated_state'] = updated_state
   m.train_ops['init_state'] = [init_state for _ in updated_state]
   
-  m.train_ops['step'] = m.action_logits_op #mhr:!!!!!!! m.action_prob_op
+  
   m.train_ops['common'] = [m.input_tensors['common']['orig_maps'],
                            m.input_tensors['common']['goal_loc']]
   m.train_ops['batch_norm_is_training_op'] = batch_norm_is_training_op
-  m.loss_ops = []; m.loss_ops_names = [];
+  m.loss_ops = []; m.loss_ops_names = []
 
   if args.arch.readout_maps:
     with tf.name_scope('readout_maps'):
@@ -541,23 +657,28 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
           scope='loss')
       m.readout_maps_loss_op = 1000.*m.readout_maps_loss_op
 
+
   ewma_decay = 0.99 if is_training else 0.0
 
 
   weight_one = tf.ones_like(m.input_tensors['train']['action'], dtype=tf.float32, name='weight')
   ones_old, ones = tf.split(weight_one, [1,2], 2)
   
-  tens = ones_old * 10.0
+  tens = ones_old * 20.0
   weight = tf.concat([tens, ones], 2)
   sh_list = weight.get_shape().as_list()
   print(sh_list)
-  m.reg_loss_op, m.data_loss_op, m.total_loss_op, m.acc_ops = \
-    compute_losses_multi_or(m.action_logits_op,
-                            m.input_tensors['train']['action'], weights=weight,
+  m.reg_loss_op, m.data_loss_op, m.total_loss_op, m.acc_ops, m.action_logits_op = \
+    compute_losses_multi_or(m.action_logits_op_vec,
+                            m.input_tensors['train']['action'], 
+                            m.input_tensors['train']['command'], 
+                            weights=weight,
                             num_actions=task_params.num_actions,
                             data_loss_wt=100 ,#args.solver.data_loss_wt,
                             reg_loss_wt= 0.05,#args.solver.reg_loss_wt,
                             ewma_decay=ewma_decay)
+  
+  m.train_ops['step'] = m.action_logits_op
   
   if args.arch.readout_maps:
     m.total_loss_op = m.total_loss_op + m.readout_maps_loss_op

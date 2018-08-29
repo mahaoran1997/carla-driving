@@ -73,7 +73,9 @@ else:
 readout_img = Image.open(cityfile)
 img_array = np.asarray(readout_img)
 
-readout = True
+readout = False
+
+saveimgs = False
 
 
 
@@ -114,81 +116,43 @@ def compute_angle(x0, y0, x1, y1):
 
 def find_valid_episode_position(positions, waypointer, rng, difficulty):
 
-    far = False
     debugging = False
 
     found_match = False
-    check_turn = True #False
-    turn = rng.rand() < 0.7
-    print 
     while not found_match:
-        index_start = rng.choice(range(len(positions))) #np.random.randint(len(positions))
-        start_pos = positions[index_start]
-        if not waypointer.test_position((start_pos.location.x, start_pos.location.y, 22),
-                                        (start_pos.orientation.x, start_pos.orientation.y, start_pos.orientation.z)):
+        index_start = rng.choice(range(len(positions)))
+        start_pos =positions[index_start]
+        if not waypointer.test_position((start_pos.location.x,start_pos.location.y,22),\
+            (start_pos.orientation.x,start_pos.orientation.y,start_pos.orientation.z)):
+            continue
+        index_goal = np.random.randint(len(positions))
+        if index_goal == index_start:
             continue
 
-        if not far:
-            index_goals = []
-            for i in range(len(positions)):
-                if i != index_start:
-                    tmp_pos =positions[i]  
-                    dis = sldist([start_pos.location.x,start_pos.location.y],[tmp_pos.location.x,tmp_pos.location.y])
-                    rec_dis = abs(start_pos.location.x - tmp_pos.location.x) + abs(start_pos.location.y - tmp_pos.location.y)
-                    angle1 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.orientation.x,tmp_pos.orientation.y)
-                    angle2 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.location.x-start_pos.location.x,tmp_pos.location.y-start_pos.location.y)
-                    angle3 = compute_angle(tmp_pos.orientation.x,tmp_pos.orientation.y,tmp_pos.location.x-start_pos.location.x,tmp_pos.location.y-start_pos.location.y)
-                    if angle1 > -0.7 and angle2 > 0.0 and angle3 > 0.0 and dis>1000.0 and rec_dis <= difficulty and ((not check_turn) or (turn and angle2 < 0.9) or ((not turn) and angle2 > 0.9)):
-                        index_goals.append(i)
-            if len(index_goals) == 0:
-                continue
-            index_goal = index_goals[rng.choice(range(len(index_goals)))]
-        else:
-            index_goal = rng.choice(range(len(positions))) #np.random.randint(len(positions))
-            if index_goal == index_start:
-                continue
-        
-        if (debugging):
-            index_start = 134
-            start_pos = positions[index_start]
-            index_goal = 136
-            tmp_pos =positions[index_goal]  
-            dis = sldist([start_pos.location.x,start_pos.location.y],[tmp_pos.location.x,tmp_pos.location.y])
-            angle1 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.orientation.x,tmp_pos.orientation.y)
-            angle2 = compute_angle(start_pos.orientation.x,start_pos.orientation.y,tmp_pos.location.x-start_pos.location.x,tmp_pos.location.y-start_pos.location.y)
-            print (angle1)
-            print (angle2)
-        print (' TESTING (', index_start, ',', index_goal, ')')
-        goals_pos = positions[index_goal]
-        if not waypointer.test_position((goals_pos.location.x, goals_pos.location.y, 22),
-                                        (goals_pos.orientation.x, goals_pos.orientation.y, goals_pos.orientation.z)):
-            continue
-        
-        #print([index_start, index_goal])
-        print((start_pos.location.x, start_pos.location.y, 22))
-        print((goals_pos.location.x, goals_pos.location.y, 22))
-        if far and sldist([start_pos.location.x, start_pos.location.y], [goals_pos.location.x, goals_pos.location.y]) < 25000.0:
-            print ('COntinued on distance ', sldist([start_pos.location.x, start_pos.location.y], [
-                goals_pos.location.x, goals_pos.location.y]))
 
+        print (' TESTING (',index_start,',',index_goal,')')
+        goals_pos =positions[index_goal]  
+        if not waypointer.test_position((goals_pos.location.x,goals_pos.location.y,22),\
+            (goals_pos.orientation.x,goals_pos.orientation.y,goals_pos.orientation.z)):
+            continue
+        if sldist([start_pos.location.x,start_pos.location.y],[goals_pos.location.x,goals_pos.location.y]) < 25000.0:
+            print ('COntinued on distance ', sldist([start_pos.location.x,start_pos.location.y],[goals_pos.location.x,goals_pos.location.y]))
+            
             continue
 
-        if waypointer.test_pair((start_pos.location.x, start_pos.location.y, 22),
-                                (start_pos.orientation.x, start_pos.orientation.y, start_pos.orientation.z),
-                                (goals_pos.location.x, goals_pos.location.y, 22)):
-            found_match = True
-            print ("-----------choose------------")
-            print index_start, index_goal
+        if waypointer.test_pair((start_pos.location.x,start_pos.location.y,22)\
+            ,(start_pos.orientation.x,start_pos.orientation.y,start_pos.orientation.z),\
+            (goals_pos.location.x,goals_pos.location.y,22)):
+            found_match=True
         waypointer.reset()
     waypointer.reset()
-
     return index_start, index_goal
 
 
 class CarlaEnvMultiplexer:
     def __init__(self, logdir):
         logdir += '/pics'
-        if not os.path.exists(logdir):
+        if saveimgs and (not os.path.exists(logdir)):
             os.makedirs(logdir)
         #self.drive_config = configDrive()
         self.drive_configs = []
@@ -331,8 +295,10 @@ class CarlaEnvWrapper():
         if readout:
             for i in range(len(self.drive_configs[0].map_scales)):
                 f.append('readout_maps_{:d}'.format(i))
-        for i in range(len(self.drive_configs[0].map_scales)):
-            f.append('ego_goal_imgs_{:d}'.format(i))
+        #for i in range(len(self.drive_configs[0].map_scales)):
+        #    f.append('ego_goal_imgs_{:d}'.format(i))
+        f.append('speed')
+        f.append('command')
         f.append('incremental_locs')
         f.append('incremental_thetas')
         f.append('node_ids')
@@ -353,13 +319,15 @@ class CarlaEnvWrapper():
         '''
         outs = {}
         outs['loc_on_map'] = []
-        outs['ego_goal_imgs_0'] = []
-        outs['ego_goal_imgs_1'] = []
-        outs['ego_goal_imgs_2'] = []
+        #outs['ego_goal_imgs_0'] = []
+        #outs['ego_goal_imgs_1'] = []
+        #outs['ego_goal_imgs_2'] = []
         outs['incremental_thetas'] = []
         outs['imgs'] = []
         outs['incremental_locs'] = []
         outs['measurements'] = []
+        outs['command'] = []
+        outs['speed'] = []
 
         if readout:
             outs['readout_maps_0'] = []
@@ -382,13 +350,13 @@ class CarlaEnvWrapper():
             else:
                 image, measurements, direction, reach_goal, action_noisy, control = self.history[i][step_number]
             outs['loc_on_map'].append([[measurements['PlayerMeasurements'].transform.location.x, measurements['PlayerMeasurements'].transform.location.y]])
-            goal_imgs = self.carla_envs[i].get_ego_goal_img()
+            '''goal_imgs = self.carla_envs[i].get_ego_goal_img()
             for j in range(len(goal_imgs)):
-                outs['ego_goal_imgs_{:d}'.format(j)].append(goal_imgs[j])
-
-            readout_maps = self.carla_envs[i].get_readout_maps(measurements['PlayerMeasurements'].transform)
-            for j in range(len(readout_maps)):
-                outs['readout_maps_{:d}'.format(j)].append(readout_maps[j])
+                outs['ego_goal_imgs_{:d}'.format(j)].append(goal_imgs[j])'''
+            if readout:
+                readout_maps = self.carla_envs[i].get_readout_maps(measurements['PlayerMeasurements'].transform)
+                for j in range(len(readout_maps)):
+                    outs['readout_maps_{:d}'.format(j)].append(readout_maps[j])
             current_theta = np.arctan2(measurements['PlayerMeasurements'].transform.orientation.y, measurements['PlayerMeasurements'].transform.orientation.x)
             if (step_number > 0):
                 if measurements['PlayerMeasurements'].transform.location.y-self.history[i][step_number-1][1]['PlayerMeasurements'].transform.location.y < 0.1 and measurements['PlayerMeasurements'].transform.location.x-self.history[i][step_number-1][1]['PlayerMeasurements'].transform.location.x < 0.1:
@@ -418,7 +386,11 @@ class CarlaEnvWrapper():
             acx = ((-current_pos.orientation.y)*ax-current_pos.orientation.x*ay)/orientation_vec_length
             acy = (current_pos.orientation.x*ax+(-current_pos.orientation.y)*ay)/orientation_vec_length
             outs['measurements'].append([[measurements['PlayerMeasurements'].forward_speed, acx, acy]])
-
+            outs['speed'].append([[measurements['PlayerMeasurements'].forward_speed]])
+            #directions ( 3 is left, 4 is right, 5 is straight)
+            #direction -= 2.0
+            outs['command'].append([[1.0, 0.0, 0.0, 0.0]])
+            outs['command'][i][0][int(round(direction-2.0))] = 1.0
             #useless inputs
             outs['node_ids'].append([[self.carla_envs[i].episode_config[0]]]) 
             outs['gt_dist_to_goal'].append([[0.0]]) 
@@ -566,7 +538,7 @@ class CarlaEnv(Driver):
             self.logdir = self.basedir + '/train/'+str(self.iter)
         else:
             self.logdir = self.basedir + '/test/'+str(self.iter)
-        if ((Training and self.iter % 20 == 0) or (not Training)) and (not os.path.exists(self.logdir)):
+        if saveimgs and ((Training and self.iter % 20 == 0) or (not Training)) and (not os.path.exists(self.logdir)):
             os.makedirs(self.logdir)
 
 
@@ -788,6 +760,7 @@ class CarlaEnv(Driver):
 		# print 'Selected Position ',self.episode_config[1],'from len ', len(self.positions)
 
         if reach_goal == 0:
+            #directions ( 3 is left, 4 is right, 5 is straight)
             direction, _ = self.planner.get_next_command(pos, ori, [
                 self.positions[self.episode_config[1]].location.x, self.positions[self.episode_config[1]].location.y,
                 22], (1, 0, 0))
@@ -819,13 +792,13 @@ class CarlaEnv(Driver):
             image = image[:, :, ::-1]
             image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
             #if step_number % 4 == 0 or step_number==79:
-            if (not Training) or (Training and self.iter % 20 == 0):
+            if saveimgs and ((not Training) or (Training and self.iter % 20 == 0)):
                 Image.fromarray(image).save(self.logdir+"/img_"+str((self.id)) +"_" + str((capture_time)) + ".jpg")
             #image_input = image *1. - 128
         elif self.typ == 'd':
             image = measurements['Depth'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
             image = scipy.misc.imresize(image, [self._driver_conf.resolution[0], self._driver_conf.resolution[1]])
-            if step_number % 4 == 0 or step_number==79:
+            if saveimgs and (step_number % 4 == 0 or step_number==79):
                 Image.fromarray(image).save(self.logdir+"/dep_" +str((self.id)) +"_" + str((capture_time)) + ".jpg")
             #image_input = np.array(image)
         else:

@@ -162,7 +162,7 @@ def process_arch_learned_map(args, arch_vars):
     n_scales = int(np.ceil(n_scales)+1)
 
     args.navtask.task_params.map_scales = [0.0025, 0.005, 0.01] #list(sc*(0.5**(np.arange(n_scales))[::-1]))
-    args.navtask.task_params.map_crop_sizes = [32 for x in range(n_scales)]
+    args.navtask.task_params.map_crop_sizes = [128 for x in range(n_scales)]
 
     args.arch.fr_stride = 1
     args.arch.vin_action_neurons = 8
@@ -171,7 +171,7 @@ def process_arch_learned_map(args, arch_vars):
 
     args.mapper_arch.pad_map_with_zeros_each = [0 for _ in range(n_scales)]
     args.mapper_arch.deconv_neurons = [64*n_scales, 32*n_scales, 16*n_scales]
-    args.mapper_arch.deconv_strides = [1, 2, 2]
+    args.mapper_arch.deconv_strides = [2, 2, 4]
 
     if arch_vars.var2 == 'MscNoVin':
       # No planning version.
@@ -216,9 +216,11 @@ def process_arch_learned_map(args, arch_vars):
     logging.fatal('arch_vars.var2 not one of Msc, MscROMms, MscROMss, MscNoVin.')
     assert(False)
 
-  map_channels = args.mapper_arch.deconv_neurons[-1] / \
-    (2*len(args.navtask.task_params.map_scales))
+  map_channels = args.mapper_arch.deconv_neurons[-1] / 2
   args.navtask.task_params.map_channels = map_channels
+  
+  #mhr: new
+  args.navtask.task_params.dropout_vec = [1.0] * 8 + [0.7] * 2 + [0.5] * 2 + [0.5] * 1 + [0.5, 1.] * 5
   
   return args
 
@@ -276,7 +278,7 @@ def get_args_for_config(config_name):
   # Train, test, etc.
   mode, imset = mode_str.split('_')
   args = cc.adjust_args_for_mode(args, mode)
-  args.navtask.building_names = args.navtask.dataset.get_split(imset)
+  #args.navtask.building_names = args.navtask.dataset.get_split(imset)
   args.control.test_name = '{:s}_on_{:s}'.format(mode, imset)
 
   # Log the arguments

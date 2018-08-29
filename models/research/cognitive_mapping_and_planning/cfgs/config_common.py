@@ -18,7 +18,7 @@ import numpy as np
 import logging
 import src.utils as utils
 import datasets.nav_env_config as nec
-from datasets import factory
+#from datasets import factory
 
 def adjust_args_for_mode(args, mode):
   if mode == 'train':
@@ -257,5 +257,5 @@ def process_navtask_str(navtask_str):
   navtask.task_params.img_channels = navtask.camera_param.img_channels
   navtask.task_params.img_fov      = navtask.camera_param.fov
   
-  navtask.dataset = factory.get_dataset(navtask_vars.dataset_name)
+  #navtask.dataset = factory.get_dataset(navtask_vars.dataset_name)
   return navtask

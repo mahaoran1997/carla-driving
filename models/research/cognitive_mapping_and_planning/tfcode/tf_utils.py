@@ -98,7 +98,7 @@ def step_gt_prob(step, step_number_op):
 
 def inverse_sigmoid_decay(k, global_step_op):
   with tf.name_scope('inverse_sigmoid_decay'):
-    k = tf.constant(k/1.5, dtype=tf.float32) #mhr:!!!! no /10
+    k = tf.constant(k, dtype=tf.float32) #mhr:!!!! no /10
     tmp = k*tf.exp(-tf.cast(global_step_op, tf.float32)/k)
     tmp = tmp / (1. + tmp)
   return tmp
@@ -450,48 +450,20 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
 
 
     net_state_to_input.append(net_state)
-    prefix_logdir = 'trainlog/'+logdir[-8:-6]+"/logfiles/"
+    #prefix_logdir = 'trainlog/'+logdir[-8:-6]+"/logfiles/"
     n_step = sess.run(global_step)
-    if not os.path.exists(prefix_logdir+str(n_step)):
-      os.makedirs(prefix_logdir+str(n_step))
+    #if not os.path.exists(prefix_logdir+str(n_step)):
+    #  os.makedirs(prefix_logdir+str(n_step))
       #outputfile = open(logdir+"/logfiles/"+str(n_step)+".pkl", "w")
-    output_file = open(prefix_logdir+str(n_step)+"/output.txt", "w")
-    output_file.write("Goals")
-    output_file.write(str(input['goal_loc']))
-    output_file.write("Steps")
+    #output_file = open(prefix_logdir+str(n_step)+"/output.txt", "w")
+    #output_file.write("Goals")
+    #output_file.write(str(input['goal_loc']))
+    #output_file.write("Steps")
     for j in range(num_steps):
       #rec = {}
       print ('num_step: {:d}'.format(j))
       f, ori = e.get_features(states[j], j)
-      #rec['ego_goal_imgs_0']=f['ego_goal_imgs_0'].tolist()
-      #rec['ego_goal_imgs_1']=f['ego_goal_imgs_1'].tolist()
-      #rec['ego_goal_imgs_2']=f['ego_goal_imgs_2'].tolist()
-      '''goal_img_0_pre = np.sum(f['ego_goal_imgs_0'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
-      goal_img_0 = np.concatenate((goal_img_0_pre, goal_img_0_pre, goal_img_0_pre), 2)
-      goal_img_1_pre = np.sum(f['ego_goal_imgs_1'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
-      goal_img_1 = np.concatenate((goal_img_1_pre, goal_img_1_pre, goal_img_1_pre), 2)
-      goal_img_2_pre = np.sum(f['ego_goal_imgs_2'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
-      goal_img_2 = np.concatenate((goal_img_2_pre, goal_img_2_pre, goal_img_2_pre), 2)
-      Image.fromarray(goal_img_0.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_0.jpg")
-      Image.fromarray(goal_img_1.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_1.jpg")
-      Image.fromarray(goal_img_2.tolist()).save(logdir+"/logfiles/"+str(n_step)+"/"+str(j)+"_goal_img_2.jpg")
-      '''
-      '''Image.fromarray(np.uint8(goal_img_0)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_goal_img_0.jpg")
-      Image.fromarray(np.uint8(goal_img_1)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_goal_img_1.jpg")
-      Image.fromarray(np.uint8(goal_img_2)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_goal_img_2.jpg")
       
-      sum_num_0 = net_state['running_sum_num_0'][0, 0, :, :, :3] + 128.0
-      sum_num_1 = net_state['running_sum_num_1'][0, 0, :, :, :3] + 128.0
-      sum_num_2 = net_state['running_sum_num_2'][0, 0, :, :, :3] + 128.0
-
-      Image.fromarray(np.uint8(sum_num_0)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_sum_num_0.jpg")
-      Image.fromarray(np.uint8(sum_num_1)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_sum_num_1.jpg")
-      Image.fromarray(np.uint8(sum_num_2)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_sum_num_2.jpg")
-      output_file.write(str(f['loc_on_map']))
-      output_file.write(str(ori))
-      output_file.write(str(f['incremental_locs']))
-      output_file.write(str(f['incremental_thetas']))'''
-      #f = e.pre_features(f)
       print ("----------------------------------f----------------------------------")
       #print(f)
       f.update(net_state)
@@ -509,7 +481,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
                        m.train_ops['step_data_cache'],
                        m.train_ops['updated_state'],
-                       m.train_ops['outputs'],  m.action_logits_op_pre] , feed_dict=feed_dict)
+                       m.train_ops['outputs']] , feed_dict=feed_dict)
       '''m.ego_map_ops, m.coverage_ops,'''
       ''', m.value_ops[0], m.value_ops[1],
                        m.value_ops[2], m.fr_ops[0], m.fr_ops[1], m.fr_ops[2]'''
@@ -521,34 +493,9 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       #rec['action_probs']=outs[0].tolist()
       print ("----------------outs-----------------")
       print action_probs
-      print (outs[5])
+      #print (outs[5])
 
-      #fr_0_pre = np.amax(outs[9][0,  :, :, :], 2)[:,:,np.newaxis]*50.0
-      #fr_0 = np.concatenate((fr_0_pre, fr_0_pre, fr_0_pre), 2)
-      #fr_1_pre = np.amax(outs[10][0,  :, :, :], 2)[:,:,np.newaxis]*50.0
-      #fr_1 = np.concatenate((fr_1_pre, fr_1_pre, fr_1_pre), 2)
-      #fr_2_pre = np.amax(outs[11][0,  :, :, :], 2)[:,:,np.newaxis]*50.0
-      #fr_2 = np.concatenate((fr_2_pre, fr_2_pre, fr_2_pre), 2)
-
-      #Image.fromarray(np.uint8(fr_0)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_fr_0.jpg")
-      #Image.fromarray(np.uint8(fr_1)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_fr_1.jpg")
-      #Image.fromarray(np.uint8(fr_2)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_fr_2.jpg")
       
-
-      #vin_0 = outs[6][0,  :, :, :] * 20.0
-      #vin_1 = outs[7][0,  :, :, :] * 20.0
-      #vin_2 = outs[8][0,  :, :, :] * 20.0
-
-      #print outs[9][0,  :, :, :]
-      #print outs[6][0,  :, :, :]
-
-      #Image.fromarray(np.uint8(vin_0)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_vin_0.jpg")
-      #Image.fromarray(np.uint8(vin_1)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_vin_1.jpg")
-      #Image.fromarray(np.uint8(vin_2)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_vin_2.jpg")
-      
-      #print (outs[6])
-      # outs
-      #fpkl.append(rec)
       #mhr:useless?
       if hasattr(e, 'update_state'):
         outputs = outs[4]
@@ -556,8 +503,6 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
         e.update_state(outputs, j)
 
       state_targets.append(e.get_targets(states[j], j))
-      #print ("----------------state_targets-----------------")
-      #print(state_targets[-1])
 
       if j < num_steps-1:
         # Sample from action_probs and optimal action.
@@ -577,7 +522,7 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
         net_state_to_input.append(net_state)
         print ("----------------net_state_below-----------------")
         #print net_state
-    output_file.close()
+    #output_file.close()
     
     #e.sample_env
     # Concatenate things together for training.
@@ -621,43 +566,8 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
       #print outss
 
       feed_dict[m.train_ops['batch_norm_is_training_op']] = True
-      outss = sess.run([m.train_ops['step'], m.readout_maps_gt,
-                        m.readout_maps_logits], feed_dict=feed_dict)
-      #print(outss)
-      if np.mod(n_step, 20) == 0:
-        for j in range(num_steps):
-          ego_img_0_pre = outss[1][0, j,  :, :, 0]
-          ego_img_0_pre = ego_img_0_pre[:,:,np.newaxis] * 255.0
-          ego_img_0 = np.concatenate((ego_img_0_pre, ego_img_0_pre, ego_img_0_pre), 2)
-          
-          ego_img_1_pre = outss[1][0, j,  :, :, 1]
-          ego_img_1_pre = ego_img_1_pre[:,:,np.newaxis] * 255.0
-          ego_img_1 = np.concatenate((ego_img_1_pre, ego_img_1_pre, ego_img_1_pre), 2)
-          
-          ego_img_2_pre = outss[1][0, j,  :, :, 2]
-          ego_img_2_pre = ego_img_2_pre[:,:,np.newaxis] * 255.0
-          ego_img_2 = np.concatenate((ego_img_2_pre, ego_img_2_pre, ego_img_2_pre), 2)
-          
-          Image.fromarray(np.uint8(ego_img_0)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_ego_0.jpg")
-          Image.fromarray(np.uint8(ego_img_1)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_ego_1.jpg")
-          Image.fromarray(np.uint8(ego_img_2)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_ego_2.jpg")
-          
-          ego_img_0_pre = outss[2][0, j,  :, :, 0]
-          ego_img_0_pre = ego_img_0_pre[:,:,np.newaxis] * 255.0
-          ego_img_0 = np.concatenate((ego_img_0_pre, ego_img_0_pre, ego_img_0_pre), 2)
-          
-          ego_img_1_pre = outss[2][0, j,  :, :, 1]
-          ego_img_1_pre = ego_img_1_pre[:,:,np.newaxis] * 255.0
-          ego_img_1 = np.concatenate((ego_img_1_pre, ego_img_1_pre, ego_img_1_pre), 2)
-          
-          ego_img_2_pre = outss[2][0, j,  :, :, 2]a
-          ego_img_2_pre = ego_img_2_pre[:,:,np.newaxis] * 255.0
-          ego_img_2 = np.concatenate((ego_img_2_pre, ego_img_2_pre, ego_img_2_pre), 2)
-          
-          Image.fromarray(np.uint8(ego_img_0)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_ego_pre_0.jpg")
-          Image.fromarray(np.uint8(ego_img_1)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_ego_pre_1.jpg")
-          Image.fromarray(np.uint8(ego_img_2)).save(prefix_logdir+str(n_step)+"/"+str(j)+"_ego_pre_2.jpg")
-          
+      #outss = sess.run([m.train_ops['step']], feed_dict=feed_dict)
+      
 
       if np.mod(n_step, train_display_interval) == 0:
         total_loss, np_global_step, summary, print_summary = sess.run(

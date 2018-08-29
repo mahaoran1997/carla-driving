@@ -35,62 +35,71 @@ import src.file_utils as fu
 from tfcode import tf_utils
 
 
-def compute_losses_multi_or(logits, actions_one_hot, weights=None,
+def compute_losses_multi_or(logits_vec, actions, commands, weights=None,
                             num_actions=-1, data_loss_wt=1., reg_loss_wt=1.,
                             ewma_decay=0.99, reg_loss_op=None):
   assert(num_actions > 0), 'num_actions must be specified and must be > 0.'
-  
-  #TODO: normalization  !!!!!!!mhr:
+  with tf.name_scope('loss_total'):
 
-  with tf.name_scope('loss'):
+    
+
     if weights is None:
-      #!!!!mhr:????weight
-      weights = tf.ones_like(actions_one_hot, dtype=tf.float32, name='weight')   
-    actions_one_hot = tf.cast(tf.reshape(actions_one_hot, [-1, num_actions],
-                                         're_actions_one_hot'), tf.float32)
+      weights = tf.ones_like(actions, dtype=tf.float32, name='weight')   
+    actions = tf.cast(tf.reshape(actions, [-1, num_actions], 're_actions_one_hot'), tf.float32)
+    commands = tf.reshape(commands, [-1, len(logits_vec)], 're_command')
     weights = tf.reshape(weights, [-1, num_actions], 're_weight')
     weights_sum = tf.reduce_sum(weights, reduction_indices=1)
     total = tf.reduce_sum(weights_sum)
-    #weights = weights/total
 
-    #action_prob = tf.nn.softmax(logits)
-    #action_prob = tf.reduce_sum(tf.multiply(action_prob, actions_one_hot),
-    #                            reduction_indices=1)
-    #example_loss = -tf.log(tf.maximum(tf.constant(1e-4), action_prob))
+    vec_id = 0
+    #for each command
+    commands_vec = tf.unstack(commands, axis = 1)
 
-    #data_loss_op = tf.reduce_sum(example_loss * weights) / total
-    #print actions_one_hot
-    #print logits
-    #print weights
-    #print total
+    action_commands_vec = []
+    for commands in commands_vec:
+      action_commands_vec.append(tf.stack([commands, commands, commands], 1))
 
-    #action_prob = tf.nn.softmax(logits)
-    #action_prob = 
-    #steer_pre, throttle_brake_pre = tf.split(logits, [1,2], axis = 1)
+    for logits in logits_vec:
 
-    example_loss = tf.reduce_sum(weights * tf.square(logits - actions_one_hot), 1)
+      with tf.name_scope('loss_'+str(vec_id)):
 
-    data_loss_op = tf.reduce_sum(example_loss * weights_sum) / total
+        example_loss = tf.reduce_sum(weights * tf.square(logits - actions), 1)
+        branch_loss = example_loss * commands_vec[vec_id]
+        tmp_data_loss_op = tf.reduce_sum(branch_loss * weights_sum)
+        
+        is_correct = tf.cast(tf.less(example_loss, 0.01, name='pred_class'),  tf.float32) 
+        branch_acc = is_correct * commands_vec[vec_id]
+        tmp_acc_op = tf.reduce_sum(branch_acc * weights_sum)
 
-    #data_loss_op = tf.losses.mean_squared_error( actions_one_hot, logits, weights, scope='loss')/total
+        tmp_action = action_commands_vec[vec_id] * logits
+
+      if vec_id == 0:
+        data_loss_op = tmp_data_loss_op
+        acc_op = tmp_acc_op
+        actions_op = tmp_action
+      else:
+        data_loss_op = tf.add(tmp_data_loss_op, data_loss_op)
+        acc_op = tf.add(tmp_acc_op, acc_op)
+        actions_op = tf.add(tmp_action, actions_op)
+      vec_id += 1
+    
+    data_loss_op = data_loss_op/total
+    acc_op = acc_op/total
+
     if reg_loss_op is None:
       if reg_loss_wt > 0:
         reg_loss_op = tf.add_n(tf.losses.get_regularization_losses())
       else:
         reg_loss_op = tf.constant(0.)
-    
     if reg_loss_wt > 0:
       total_loss_op = data_loss_wt*data_loss_op + reg_loss_wt*reg_loss_op 
     else:
       total_loss_op = data_loss_wt*data_loss_op
-
-    is_correct = tf.cast(tf.less(example_loss, 0.03, name='pred_class'),  tf.float32) 
-    acc_op = tf.reduce_sum(is_correct*weights_sum) / total
-
     ewma_acc_op = moving_averages.weighted_moving_average(
-        acc_op, ewma_decay, weight=total, name='ewma_acc')
+      acc_op, ewma_decay, weight=total, name='ewma_acc')
     acc_ops = [ewma_acc_op]
-  return reg_loss_op, data_loss_op, total_loss_op, acc_ops
+
+  return reg_loss_op, data_loss_op, total_loss_op, acc_ops, actions_op
 
 
 def get_repr_from_image(images_reshaped, modalities, data_augment, encoder,

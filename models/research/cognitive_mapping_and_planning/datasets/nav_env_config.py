@@ -75,7 +75,7 @@ def nav_env_base_config():
   # time per iteration for cmp is 0.82 seconds per episode with 3.4s overhead per batch.
   task_params = utils.Foo(max_dist=32,
                           step_size=8,
-                          num_steps=80,  #TODO: !!!!!!!!!!mhr: 40,
+                          num_steps=10,  #TODO: !!!!!!!!!!mhr: 40,
                           num_actions=3, #TODO: !!!!!!!!!!mhr: 4,
                           batch_size=4, 
                           building_seed=0,

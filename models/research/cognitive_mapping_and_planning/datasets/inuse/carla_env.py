@@ -418,8 +418,11 @@ class CarlaEnvWrapper():
 
     def get_targets(self, current_node_ids, step_number):
         """Returns the target actions from the current node."""
-        action = self.get_optimal_action(current_node_ids, step_number)
-        action = np.expand_dims(action, axis=1)
+        optimal_actions = []
+        for i in range(len(self.carla_envs)):
+            optimal_actions.append([self.history[i][step_number][5].steer, self.history[i][step_number][5].throttle, self.history[i][step_number][5].brake])
+        optimal_actions = np.array(optimal_actions).astype(np.float32)
+        action = np.expand_dims(optimal_actions, axis=1)
         return vars(utils.Foo(action=action))
     
     def get_targets_name(self):

@@ -162,7 +162,7 @@ def process_arch_learned_map(args, arch_vars):
     n_scales = int(np.ceil(n_scales)+1)
 
     args.navtask.task_params.map_scales = [0.0025, 0.005, 0.01] #list(sc*(0.5**(np.arange(n_scales))[::-1]))
-    args.navtask.task_params.map_crop_sizes = [128 for x in range(n_scales)]
+    args.navtask.task_params.map_crop_sizes = [64 for x in range(n_scales)]
 
     args.arch.fr_stride = 1
     args.arch.vin_action_neurons = 8
@@ -171,7 +171,7 @@ def process_arch_learned_map(args, arch_vars):
 
     args.mapper_arch.pad_map_with_zeros_each = [0 for _ in range(n_scales)]
     args.mapper_arch.deconv_neurons = [64*n_scales, 32*n_scales, 16*n_scales]
-    args.mapper_arch.deconv_strides = [2, 2, 4]
+    args.mapper_arch.deconv_strides = [2, 2, 2]
 
     if arch_vars.var2 == 'MscNoVin':
       # No planning version.

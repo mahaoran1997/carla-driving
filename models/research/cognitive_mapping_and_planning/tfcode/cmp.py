@@ -561,10 +561,10 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   print(xc)
 
   """conv3"""
-  xc = network_manager.conv_block(xc, 3, 2, 128, padding_in='VALID')
-  print(xc)
   xc = network_manager.conv_block(xc, 3, 1, 128, padding_in='VALID')
-  print(xc)
+  print(xc[])
+  xc = network_manager.conv_block(xc, 3, 1, 128, padding_in='VALID')
+  print(xc[])
 
   """conv4"""
   xc = network_manager.conv_block(xc, 3, 1, 256, padding_in='VALID')

@@ -67,71 +67,47 @@ def _inputs(problem):
   # Set up inputs.
   with tf.name_scope('inputs'):
     inputs = []
-    inputs.append(('orig_maps', tf.float32, 
-                   (problem.batch_size, 1, None, None, 1)))
-    inputs.append(('goal_loc', tf.float32, 
-                   (problem.batch_size, problem.num_goals, 2)))
-    common_input_data, _ = tf_utils.setup_inputs(inputs)
-
-    inputs = []
     if problem.input_type == 'vision':
       # Multiple images from an array of cameras.
+      #print(problem.aux_delta_thetas)
       inputs.append(('imgs', tf.float32, 
-                     (problem.batch_size, None, len(problem.aux_delta_thetas)+1,
+                     (None, len(problem.aux_delta_thetas)+1,
                       problem.img_height, problem.img_width,
                       problem.img_channels)))
     elif problem.input_type == 'analytical_counts':
       for i in range(len(problem.map_crop_sizes)):
         inputs.append(('analytical_counts_{:d}'.format(i), tf.float32, 
-                      (problem.batch_size, None, problem.map_crop_sizes[i],
+                      (None, problem.map_crop_sizes[i],
                        problem.map_crop_sizes[i], problem.map_channels)))
 
     if problem.outputs.readout_maps: 
       for i in range(len(problem.readout_maps_crop_sizes)):
         inputs.append(('readout_maps_{:d}'.format(i), tf.float32, 
-                      (problem.batch_size, None,
+                      (None,
                        problem.readout_maps_crop_sizes[i],
                        problem.readout_maps_crop_sizes[i],
                        problem.readout_maps_channels)))
 
-    '''for i in range(len(problem.map_crop_sizes)):
-      inputs.append(('ego_goal_imgs_{:d}'.format(i), tf.float32, 
-                    (problem.batch_size, None, problem.map_crop_sizes[i],
-                     problem.map_crop_sizes[i], problem.goal_channels)))'''
-    for s in ['sum_num', 'sum_denom', 'max_denom']:
-      inputs.append(('running_'+s, tf.float32,
-                      (problem.batch_size, 1, problem.map_crop_sizes[0],
+    inputs.append(('running_sum_num', tf.float32, (None, problem.map_crop_sizes[0],
                       problem.map_crop_sizes[0], problem.map_channels)))
 
     inputs.append(('incremental_locs', tf.float32, 
-                   (problem.batch_size, None, 2)))
+                   (None, 2)))
     inputs.append(('incremental_thetas', tf.float32, 
-                   (problem.batch_size, None, 2)))   #!!!mhr: 1->2
+                   (None, 2)))   #!!!mhr: 1->2
 
 
-    inputs.append(('command', tf.float32, (problem.batch_size, None, 4)))
-    inputs.append(('speed', tf.float32, (problem.batch_size, None, 1)))  #!!!!mhr: new adding
-    inputs.append(('measurements', tf.float32, (problem.batch_size, None, 3)))  #!!!!mhr: new adding
-    inputs.append(('step_number', tf.int32, (1, None, 1)))
-    inputs.append(('node_ids', tf.int32, (problem.batch_size, None,
-                                          problem.node_ids_dim)))
-    inputs.append(('perturbs', tf.float32, (problem.batch_size, None,
-                                            problem.perturbs_dim)))
-    
-    # For plotting result plots
-    inputs.append(('loc_on_map', tf.float32, (problem.batch_size, None, 2)))
-    inputs.append(('gt_dist_to_goal', tf.float32, (problem.batch_size, None, 1)))
+    inputs.append(('command', tf.float32, (None, 4)))
+    inputs.append(('speed', tf.float32, (None, 1)))  #!!!!mhr: new adding
+    #inputs.append(('measurements', tf.float32, (None, 3)))  #!!!!mhr: new adding
     
     #print(inputs)
     step_input_data, _ = tf_utils.setup_inputs(inputs)
-    
-
     inputs = []
-    inputs.append(('action', tf.float32, (problem.batch_size, None, problem.num_actions)))
+    inputs.append(('action', tf.float32, (None, problem.num_actions)))
     train_data, _ = tf_utils.setup_inputs(inputs)
     train_data.update(step_input_data)
-    train_data.update(common_input_data)
-  return common_input_data, step_input_data, train_data 
+  return step_input_data, train_data 
 
 def readout_general(multi_scale_belief, num_neurons, strides, layers_per_block,
                     kernel_size, batch_norm_is_training_op, wt_decay):
@@ -146,62 +122,52 @@ def readout_general(multi_scale_belief, num_neurons, strides, layers_per_block,
   return x, probs
 
 
-def running_combine(fss_logits, confs_probs, incremental_locs,
-                    incremental_thetas, previous_sum_num, previous_sum_denom,
-                    previous_max_denom, map_size, num_steps):
-  # fss_logits is B x N x H x W x C
-  # confs_logits is B x N x H x W x C
-  # incremental_locs is B x N x 2
-  # incremental_thetas is B x N x 2  #1->2
-  # previous_sum_num etc is B x 1 x H x W x C
+def running_combine(incremental_locs, incremental_thetas, previous_sum_num, map_size, batch_size):
+  # incremental_locs is B x 2
+  # incremental_thetas is B x 2  #1->2
+  # previous_sum_num etc is B x H x W x C    #1 -> N
 
-  with tf.name_scope('combine_{:d}'.format(num_steps)):
+  with tf.name_scope('combine_{:d}'.format(batch_size)):
     running_sum_nums_ = []
-    running_sum_denoms_ = []
-    running_max_denoms_ = []
-
-    fss_logits_ = tf.unstack(fss_logits, axis=1, num=num_steps)
-    confs_probs_ = tf.unstack(confs_probs, axis=1, num=num_steps)
-    incremental_locs_ = tf.unstack(incremental_locs, axis=1, num=num_steps)
-    incremental_thetas_ = tf.unstack(incremental_thetas, axis=1, num=num_steps)
-    incremental_thetas_2 = tf.transpose(incremental_thetas_, perm=[0, 2, 1])
-    running_sum_num = tf.unstack(previous_sum_num, axis=1, num=1)[0]
-    running_sum_denom = tf.unstack(previous_sum_denom, axis=1, num=1)[0]
-    running_max_denom = tf.unstack(previous_max_denom, axis=1, num=1)[0]
+    incremental_locs_ = tf.unstack(incremental_locs, axis=0, num=batch_size)
+    incremental_thetas_ = tf.unstack(incremental_thetas, axis=0, num=batch_size)
+    incremental_thetas_2 = []
+    for thetas in incremental_thetas_:
+      incremental_thetas_2.append(tf.unstack(thetas, axis=0))
+    running_sum_num = tf.unstack(previous_sum_num, axis=0, num=batch_size)
     #print(num_steps)
 
-    for i in range(num_steps):
+    for i in range(batch_size):
       # Rotate the previous running_num and running_denom
-      inc_theta_0 = tf.reshape(incremental_thetas_2[i][0], shape = [-1, 1])
-      inc_theta_1 = tf.reshape(incremental_thetas_2[i][1], shape = [-1, 1])
+      inc_theta_0 = tf.reshape(incremental_thetas_[i][0], shape = [-1, 1])
+      inc_theta_1 = tf.reshape(incremental_thetas_[i][1], shape = [-1, 1])
+      inc_loc = tf.reshape(incremental_locs_[i], shape = [-1, 2])
       #print incremental_locs_[i]
       #print inc_theta_0
-      running_sum_num, running_sum_denom, running_max_denom = rotate_preds(
-          incremental_locs_[i], inc_theta_0, map_size,
-          [running_sum_num, running_sum_denom, running_max_denom],
-          output_valid_mask=False)[0]
-      running_sum_num, running_sum_denom, running_max_denom = rotate_preds(
-          tf.constant(0.0, shape=[incremental_locs_[i].shape[0], 2]), inc_theta_1, map_size,
-          [running_sum_num, running_sum_denom, running_max_denom],
-          output_valid_mask=False)[0]
-      # print i, num_steps, running_sum_num.get_shape().as_list()
-      running_sum_num = running_sum_num + fss_logits_[i] * confs_probs_[i]
-      running_sum_denom = running_sum_denom + confs_probs_[i]
-      running_max_denom = tf.maximum(running_max_denom, confs_probs_[i])
-      running_sum_nums_.append(running_sum_num)
-      running_sum_denoms_.append(running_sum_denom)
-      running_max_denoms_.append(running_max_denom)
+      tmp_running_sum_num = rotate_preds(
+          inc_loc, inc_theta_0, map_size,
+          [running_sum_num[i]],
+          output_valid_mask=False)[0][0]
+      tmp_running_sum_num = rotate_preds(
+          tf.constant(0.0, shape=[inc_loc.shape[0], 2]), inc_theta_1, map_size,
+          [tmp_running_sum_num],
+          output_valid_mask=False)[0][0]
+      print(i)
+      print(tmp_running_sum_num.get_shape().as_list())
+      running_sum_nums_.append(tmp_running_sum_num)
 
-    running_sum_nums = tf.stack(running_sum_nums_, axis=1)
-    running_sum_denoms = tf.stack(running_sum_denoms_, axis=1)
-    running_max_denoms = tf.stack(running_max_denoms_, axis=1)
-    return running_sum_nums, running_sum_denoms, running_max_denoms
+    running_sum_nums = tf.stack(running_sum_nums_, axis=0)
+    return running_sum_nums
 
 def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
                         is_training, batch_norm_is_training_op, num_maps,
                         split_maps=True):
   # Hit image with a resnet.
   n_views = len(task_params.aux_delta_thetas) + 1
+  print(n_views)
+  print(task_params.aux_delta_thetas)
+  print(task_params.data_augment)
+
   out = utils.Foo()
 
   images_reshaped = tf.reshape(imgs, 
@@ -218,7 +184,7 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
   sh_before = x.get_shape().as_list()
   print('------------------------------------------')
   print(sh_before)
-  out.encoder_output = tf.reshape(x, shape=[task_params.batch_size, -1, n_views] + sh_before[1:])
+  out.encoder_output = tf.reshape(x, shape=[-1, n_views] + sh_before[1:])
   print(out.encoder_output.get_shape().as_list())
   
   x = tf.reshape(out.encoder_output, shape=[-1] + sh_before[1:])
@@ -272,19 +238,7 @@ def get_map_from_images(imgs, mapper_arch, task_params, freeze_conv, wt_decay,
                      conv_fn=slim.conv2d_transpose, offset=0, name='deconv')
 
   # Reshape x the right way.
-  sh = x.get_shape().as_list()
-  x = tf.reshape(x, shape=[task_params.batch_size, -1] + sh[1:])
   out.deconv_output = x
-  #print(x.get_shape().as_list())
-  # Separate out the map and the confidence predictions, pass the confidence
-  # through a sigmoid.
-  if split_maps:
-    with tf.name_scope('split'):
-      out_all = tf.split(value=x, axis=4, num_or_size_splits=2)   #*num_maps
-      out.fss_logits = out_all[0]#[:num_maps]
-      out.confs_logits = out_all[1]#[num_maps:]
-    with tf.name_scope('sigmoid'):
-      out.confs_probs = tf.nn.sigmoid(out.confs_logits)
   return out
 
 
@@ -442,7 +396,7 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   # Setup the inputs
   m.input_tensors = {}
   m.train_ops = {}
-  m.input_tensors['common'], m.input_tensors['step'], m.input_tensors['train'] = \
+  m.input_tensors['step'], m.input_tensors['train'] = \
       _inputs(task_params)
   
   m.init_fn = None
@@ -466,20 +420,9 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
       m.train_ops['step_data_cache'] = []
 
     # Set up blobs that are needed for the computation in rest of the graph.
-    m.ego_map_ops = m.vision_ops.fss_logits
-    m.coverage_ops = m.vision_ops.confs_probs
-    
-    # Zero pad these to make them same size as what the planner expects.
-    #for i in range(len(m.ego_map_ops)):
-    #32*32*24 
-    #i = 0
-    if args.mapper_arch.pad_map_with_zeros_each[0] > 0:
-      paddings = np.zeros((5,2), dtype=np.int32)
-      paddings[2:4,:] = args.mapper_arch.pad_map_with_zeros_each[0]
-      paddings_op = tf.constant(paddings, dtype=tf.int32)
-      m.ego_map_ops = tf.pad(m.ego_map_ops, paddings=paddings_op)
-      m.coverage_ops = tf.pad(m.coverage_ops, paddings=paddings_op)
-        #print(m.ego_map_ops[i].get_shape().as_list())
+    m.ego_map_ops = m.vision_ops.deconv_output
+    print('ego_maps:')
+    print(m.ego_map_ops.get_shape().as_list())
 
   num_steps = task_params.num_steps
   num_goals = task_params.num_goals
@@ -489,14 +432,9 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
     map_crop_size_ops.append(tf.constant(map_crop_size, dtype=tf.int32, shape=(2,)))
 
   with tf.name_scope('check_size'):
-    is_single_step = tf.equal(tf.unstack(tf.shape(m.ego_map_ops), num=5)[1], 1)
+    is_single_step = tf.equal(tf.unstack(tf.shape(m.ego_map_ops), num=4)[0], task_params.batch_size)
 
-  fr_ops = []; value_ops = []
-  fr_intermediate_ops = []; value_intermediate_ops = []
-  crop_value_ops = []
-  resize_crop_value_ops = []
-  confs = []; occupancys = []
-
+  
   
   updated_state = []; state_names = []
 
@@ -505,51 +443,44 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   #with tf.variable_scope('scale_{:d}'.format(i)): 
   # Accumulate the map.
   fn = lambda ns: running_combine(
-          m.ego_map_ops,
-          m.coverage_ops,
           m.input_tensors['step']['incremental_locs'] * task_params.map_scales[0],
           m.input_tensors['step']['incremental_thetas'],
           m.input_tensors['step']['running_sum_num'],
-          m.input_tensors['step']['running_sum_denom'],
-          m.input_tensors['step']['running_max_denom'],
           map_crop_size, ns)
 
-  running_sum_num, running_sum_denom, running_max_denom = \
-      tf.cond(is_single_step, lambda: fn(1), lambda: fn(num_steps*num_goals))
-  updated_state += [running_sum_num, running_sum_denom, running_max_denom]
-  state_names += ['running_sum_num',
-                  'running_sum_denom',
-                  'running_max_denom']
+  running_sum_num_pre = tf.cond(is_single_step, lambda: fn(task_params.batch_size), lambda: fn(task_params.batch_size*task_params.num_steps))
+  
 
-  # Concat the accumulated map and goal
-  occupancy = running_sum_num / tf.maximum(running_sum_denom, 0.001)
-  conf = running_max_denom
+  with tf.name_scope('fusion'):
+    with tf.name_scope('concat'):
+      pre_sh = running_sum_num_pre.get_shape().as_list()
+      sh = [-1]+pre_sh[-3:]
+      reshape_sum_num = tf.reshape(running_sum_num_pre, shape=sh)
+      after_concat = tf.concat([reshape_sum_num, m.ego_map_ops], 3)
+    
+    init_var = np.sqrt(2.0/(args.mapper_arch.conv_ks**2)/args.mapper_arch.conv_neurons)
+    batch_norm_param = args.mapper_arch.batch_norm_param
+    batch_norm_param['is_training'] = batch_norm_is_training_op
+    batch_norm_param['decay'] = 0.95  #mhr: 0.999
+    running_sum_num = slim.conv2d(after_concat, args.mapper_arch.conv_neurons, 
+                      kernel_size=args.mapper_arch.conv_ks, stride=args.mapper_arch.conv_strides,
+                      normalizer_fn=slim.batch_norm, normalizer_params=batch_norm_param,
+                      padding='SAME', scope='fusion_conv',
+                      weights_regularizer=slim.l2_regularizer(args.solver.wt_decay),
+                      weights_initializer=tf.random_normal_initializer(stddev=init_var))
+
+    updated_state += [running_sum_num]
+    state_names += ['running_sum_num']
+    occupancy = running_sum_num
+
   # print occupancy.get_shape().as_list()
 
   # Concat occupancy, how much occupied and goal.
-  with tf.name_scope('concat'):
-    print(occupancy.get_shape().as_list())
-    sh = [-1, map_crop_size, map_crop_size, task_params.map_channels]
-    print('task_params.map_channels')
-    print(task_params.map_channels)
-    occupancy = tf.reshape(occupancy, shape=sh)
-    conf = tf.reshape(conf, shape=sh)
 
-    #sh = [-1, map_crop_size, map_crop_size, task_params.goal_channels]
-    #goal = tf.reshape(m.input_tensors['step']['ego_goal_imgs_{:d}'.format(i)], shape=sh)
-    to_concat = [occupancy, conf]#, goal]
-
-
-    print('debug:')
-    for e in to_concat:
-      print(e.get_shape().as_list())
-    x = tf.concat(to_concat, 3)
-    #32*32*48
-
-  network_manager = Network(task_params.dropout_vec, tf.shape(x))
+  network_manager = Network(task_params.dropout_vec, tf.shape(occupancy))
 
   """conv1"""  # kernel sz, stride, num feature maps
-  xc = network_manager.conv_block(x, 5, 2, 32, padding_in='VALID')
+  xc = network_manager.conv_block(occupancy, 5, 2, 32, padding_in='VALID')
   print(xc)
   xc = network_manager.conv_block(xc, 3, 1, 32, padding_in='VALID')
   print(xc)
@@ -562,9 +493,9 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
 
   """conv3"""
   xc = network_manager.conv_block(xc, 3, 1, 128, padding_in='VALID')
-  print(xc[])
+  print(xc)
   xc = network_manager.conv_block(xc, 3, 1, 128, padding_in='VALID')
-  print(xc[])
+  print(xc)
 
   """conv4"""
   xc = network_manager.conv_block(xc, 3, 1, 256, padding_in='VALID')
@@ -625,12 +556,11 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
   m.train_ops['init_state'] = [init_state for _ in updated_state]
   
   
-  m.train_ops['common'] = [m.input_tensors['common']['orig_maps'],
-                           m.input_tensors['common']['goal_loc']]
+  #m.train_ops['common'] = [m.input_tensors['common']['orig_maps'], m.input_tensors['common']['goal_loc']]
   m.train_ops['batch_norm_is_training_op'] = batch_norm_is_training_op
   m.loss_ops = []; m.loss_ops_names = []
 
-  if args.arch.readout_maps:
+  '''if args.arch.readout_maps:
     with tf.name_scope('readout_maps'):
       all_occupancys = tf.concat(m.occupancys + m.confs, 3)
       readout_maps, probs = readout_general(
@@ -655,17 +585,17 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
           tf.reshape(m.readout_maps_gt, [-1, len(task_params.readout_maps_crop_sizes)]), 
           tf.reshape(readout_maps, [-1, len(task_params.readout_maps_crop_sizes)]),
           scope='loss')
-      m.readout_maps_loss_op = 1000.*m.readout_maps_loss_op
+      m.readout_maps_loss_op = 1000.*m.readout_maps_loss_op'''
 
 
   ewma_decay = 0.99 if is_training else 0.0
 
 
   weight_one = tf.ones_like(m.input_tensors['train']['action'], dtype=tf.float32, name='weight')
-  ones_old, ones = tf.split(weight_one, [1,2], 2)
+  ones_old, ones = tf.split(weight_one, [1,2], 1)
   
   tens = ones_old * 20.0
-  weight = tf.concat([tens, ones], 2)
+  weight = tf.concat([tens, ones], 1)
   sh_list = weight.get_shape().as_list()
   print(sh_list)
   m.reg_loss_op, m.data_loss_op, m.total_loss_op, m.acc_ops, m.action_logits_op = \
@@ -677,13 +607,13 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
                             data_loss_wt=100 ,#args.solver.data_loss_wt,
                             reg_loss_wt= 0.05,#args.solver.reg_loss_wt,
                             ewma_decay=ewma_decay)
-  
+  #print(z)
   m.train_ops['step'] = m.action_logits_op
   
-  if args.arch.readout_maps:
+  '''if args.arch.readout_maps:
     m.total_loss_op = m.total_loss_op + m.readout_maps_loss_op
     m.loss_ops += [m.readout_maps_loss_op]
-    m.loss_ops_names += ['readout_maps_loss']
+    m.loss_ops_names += ['readout_maps_loss']'''
 
   m.loss_ops += [m.reg_loss_op, m.data_loss_op, m.total_loss_op]
   m.loss_ops_names += ['reg_loss', 'data_loss', 'total_loss']
@@ -711,7 +641,11 @@ def setup_to_run(m, args, is_training, batch_norm_is_training, summary_mode):
       typ=args.solver.typ, momentum2=args.solver.momentum2,
       adam_eps=args.solver.adam_eps)
 
-  if args.arch.sample_gt_prob_type == 'inverse_sigmoid_decay':
+  if args.arch.sample_gt_prob_type == 'subsection':
+    m.sample_gt_prob_op = tf_utils.step_subsection(args.arch.isd_k,
+                                                         m.global_step_op)
+
+  elif args.arch.sample_gt_prob_type == 'inverse_sigmoid_decay':
     m.sample_gt_prob_op = tf_utils.inverse_sigmoid_decay(args.arch.isd_k,
                                                          m.global_step_op)
   elif args.arch.sample_gt_prob_type == 'zero':

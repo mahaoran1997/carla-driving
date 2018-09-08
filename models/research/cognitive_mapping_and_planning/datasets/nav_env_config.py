@@ -77,7 +77,7 @@ def nav_env_base_config():
                           step_size=8,
                           num_steps=80,  #TODO: !!!!!!!!!!mhr: 40,
                           num_actions=3, #TODO: !!!!!!!!!!mhr: 4,
-                          batch_size=4, 
+                          batch_size=18, 
                           building_seed=0,
                           num_goals=1,
                           img_height=None,

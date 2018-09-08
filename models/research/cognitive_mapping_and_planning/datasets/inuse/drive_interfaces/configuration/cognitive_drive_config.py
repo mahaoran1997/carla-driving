@@ -7,8 +7,10 @@ class configDrive:
   def __init__(self):
 
     #self.experiment_name =''
-    self.carla_config ="./drive_interfaces/carla/rcCarla_9Cams_W1.ini"   # The path to carla ini file # TODO: make this class to be able to generate the ini file
-    self.host = "127.0.0.1"
+    #self.carla_config ="./drive_interfaces/carla/rcCarla_9Cams_W1.ini"   # The path to carla ini file # TODO: make this class to be able to generate the ini file
+    
+    #asp:128.32.255.29  namazu:128.32.255.26 basilisk:128.32.111.70
+    self.host = "128.32.255.29"
     self.port = 2000
     self.path = "path/" # If path is set go for it , if not expect a name set
     self.resolution = [225,225] #[200, 88]?
@@ -33,11 +35,6 @@ class configDrive:
     self.map_scales = [0.0025, 0.005, 0.01] #[0.03125, 0.0625, 0.125]
     self.map_crop_sizes = [32, 32, 32]
     self.n_ori = 4
-
-    self.reward_at_goal = 1.0
-    self.reward_time_penalty = 0.1
-    
-    self.difficulty = 10000
 
     self.stop4TL = False
 

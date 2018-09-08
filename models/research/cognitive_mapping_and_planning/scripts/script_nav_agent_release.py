@@ -73,19 +73,11 @@ from datasets.inuse.carla_env import *
 
 
 '''
-def concat_state_x(f, names):
-  af = {}
-  for k in names:
-    af[k] = np.concatenate([x[k] for x in f], axis=1)
-    # af[k] = np.swapaxes(af[k], 0, 1)
-  return af
-
-
 logdir = '57'
 iter = 0
 rng_data = [np.random.RandomState(0), np.random.RandomState(0)]
 train_step_kwargs={}
-R = lambda: CarlaEnvMultiplexer(logdir)
+R = lambda: CarlaEnvMultiplexer(logdir, 1)
 train_step_kwargs['obj'] = R()  
 n_step = 0
 while True:
@@ -93,31 +85,12 @@ while True:
   print ('iter{:d}'.format(iter))
   obj        = train_step_kwargs['obj']  
   e = obj.sample_env(rng_data)
-  print ('got instance of driver')
-  init_env_state = e.reset(rng_data)
-  input = e.get_common_data() #finish
-  #input = e.pre_common_data(input) #mhr: useless 
-  print ("---------------common_data-----------------")    
-  #print(input)
-  n_step+=1
-  if not os.path.exists(logdir+"/logfiles/"+str(n_step)):
-      os.makedirs(logdir+"/logfiles/"+str(n_step))
-  states = []
   state_targets = []
-  states.append(init_env_state)
-  for i in range(80):
-    f = e.get_features(states[i], i)
-    optimal_action = e.get_optimal_action(states[i], i)
-    state_targets.append(e.get_targets(states[i], i))
-    print('----optimal-----')
-    print (optimal_action)
-    next_state, reward = e.take_action(states[i], optimal_action, i)
-    states.append(next_state)
-  all_state_targets = concat_state_x(state_targets, e.get_targets_name())
-  dict_train = dict()
-  dict_train.update(all_state_targets)
-  print dict_train
-'''
+  for i in range(10):
+    f = e.get_features()
+    optimal_action = e.get_optimal_action()
+    state_targets.append(e.get_targets())
+    e.take_action(optimal_action, f['running_sum_num'])'''
 
 
 #image = measurements['BGRA'][0][self._driver_conf.image_cut[0]:self._driver_conf.image_cut[1], self._driver_conf.image_cut[2]:self._driver_conf.image_cut[3], :3]
@@ -217,7 +190,7 @@ def _train(args):
   container_name = ""
 
   #R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
-  R = lambda: CarlaEnvMultiplexer('trainlog/'+args.logdir[-2:]+'/trainimgs')
+  R = lambda: CarlaEnvMultiplexer('trainlog/'+args.logdir[-2:]+'/imgs', 1)
 
   
   
@@ -292,7 +265,7 @@ def _test(args):
 
   #R = lambda: nav_env.get_multiplexer_class(args.navtask, rng_data_seed)
   
-  R = lambda: CarlaEnvMultiplexer('testlog/'+args.logdir[-2:]+'/testimgs')
+  R = lambda: CarlaEnvMultiplexer('testlog/'+args.logdir[-2:]+'/imgs', 1)
 
 
 
@@ -322,10 +295,10 @@ def _test(args):
       while True:
         last_checkpoint_ = None
         while last_checkpoint_ is None:
-          #last_checkpoint_ = slim.evaluation.wait_for_new_checkpoint(
-          #  checkpoint_dir, last_checkpoint, seconds_to_sleep=10, timeout=60)
-          #print(last_checkpoint_)
-          last_checkpoint_ = 'output/cmp.lmap_Msc.clip5.sbpd_rgb_r2r_new50/model.ckpt-1290'
+          last_checkpoint_ = slim.evaluation.wait_for_new_checkpoint(
+            checkpoint_dir, last_checkpoint, seconds_to_sleep=10, timeout=60)
+          print(last_checkpoint_)
+          last_checkpoint_ = 'output/cmp.lmap_Msc.clip5.sbpd_rgb_r2r_new19/model.ckpt-4988'
           print(last_checkpoint_)
         if last_checkpoint_ is None: break
 
@@ -336,7 +309,7 @@ def _test(args):
                      time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()),
                      last_checkpoint)
 
-        if (True): #(args.control.only_eval_when_done == False or checkpoint_iter >= args.solver.max_steps):
+        if (True): 
           start = time.time()
           logging.info('Starting evaluation at %s using checkpoint %s.', 
                        time.strftime('%Y-%m-%d-%H:%M:%S', time.localtime()),
@@ -351,13 +324,11 @@ def _test(args):
               train_step_kwargs['rng_data'] = [np.random.RandomState(rng_data_seed),
                                                np.random.RandomState(rng_data_seed)]
               train_step_kwargs['rng_action'] = np.random.RandomState(rng_action_seed)
-            vals, _ = tf_utils.test_step_custom_online_sampling(
+            tf_utils.test_step_custom_online_sampling(
                 sess, None, m.global_step_op, train_step_kwargs,
                 mode=args.control.test_mode)
             should_stop = True
 
-            #if checkpoint_iter >= args.solver.max_steps: 
-            #  should_stop = True
 
             if should_stop:
               break

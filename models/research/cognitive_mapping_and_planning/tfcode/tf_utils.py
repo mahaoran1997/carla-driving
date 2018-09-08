@@ -16,7 +16,7 @@
 
 import pickle
 import numpy as np
-import sys, os
+import sys, os, math
 import tensorflow as tf
 import src.utils as utils
 import logging
@@ -95,6 +95,32 @@ def step_gt_prob(step, step_number_op):
     out = tf.cond(tf.less(step_number_op, step),
             lambda: tf.constant(1.), lambda: tf.constant(-1.))
     return out 
+
+def step_subsection(k, global_step_op):
+  with tf.name_scope('subsection'):
+    
+    st = k/(k + math.exp(2000.0/k))
+    ed = k/(k + math.exp(3000.0/k))
+    grad = (ed-st)/6000.0
+    print(st, ed, grad)
+    tmp_g = tf.constant(grad, dtype=tf.float32) * (tf.cast(global_step_op, tf.float32) - tf.constant(2000.0, dtype=tf.float32))
+    tmp_g = tmp_g + tf.constant(st, dtype=tf.float32)
+    with tf.name_scope('inverse_sigmoid_decay_in'):
+
+      print("---------------------important------------")
+
+      print(global_step_op)
+      k = tf.constant(k, dtype=tf.float32) #mhr:!!!! no /10
+      tmp1 = k*tf.exp(-tf.cast(global_step_op, tf.float32)/k)
+      tmp1 = tmp1 / (1. + tmp1)
+      #print(g_step)
+      g_step = global_step_op - tf.constant(5000, dtype=tf.int64)
+      tmp2 = k*tf.exp(-tf.cast(g_step, tf.float32)/k)
+      tmp2 = tmp2 / (1. + tmp2)
+
+    out_pre = tf.cond(tf.less(global_step_op, 2000), lambda: tmp1, lambda: tmp_g)
+    out = tf.cond(tf.less(global_step_op, 8000), lambda: out_pre, lambda: tmp2)
+  return out
 
 def inverse_sigmoid_decay(k, global_step_op):
   with tf.name_scope('inverse_sigmoid_decay'):
@@ -299,6 +325,13 @@ def concat_state_x(f, names):
     # af[k] = np.swapaxes(af[k], 0, 1)
   return af
 
+def concat_state_w(f, names):
+  af = {}
+  for k in names:
+    af[k] = np.concatenate([x[k] for x in f], axis=0)
+    # af[k] = np.swapaxes(af[k], 0, 1)
+  return af
+
 def sample_action(rng, action_probs, optimal_action, sample_gt_prob,
                   type='sample', combine_type='one_or_other'):
 
@@ -312,8 +345,9 @@ def sample_action(rng, action_probs, optimal_action, sample_gt_prob,
   action_sample_wt = np.zeros((batch_size), dtype=np.float32)
   #if combine_type == 'add':
   #  sample_gt_prob_ = np.minimum(np.maximum(sample_gt_prob, 0.), 1.)
-  sample_gt = rng.rand() < sample_gt_prob
+  #sample_gt = rng.rand() < sample_gt_prob
   for i in range(batch_size):
+    sample_gt = rng.rand() < sample_gt_prob
     if combine_type == 'one_or_other':
       if sample_gt and type == 'sample': 
         action.append(optimal_action[i])
@@ -337,31 +371,17 @@ def sample_action(rng, action_probs, optimal_action, sample_gt_prob,
 
 def train_step_custom_online_sampling(sess, train_op, global_step,
                                       train_step_kwargs, mode='train'):
-
-
-
   '''{'obj': <datasets.nav_env.BuildingMultiplexer instance at 0x7f96120f0128>, 
   'train_display_interval': 1, 
-  'iters': 1, 
-  'writer': <tensorflow.python.summary.writer.writer.FileWriter object at 0x7f95d82dc3d0>, 
-  'm': <src.utils.Foo object at 0x7f962484df90>, 
-  'num_steps': 40, 
+  'num_steps': 10, 
   'dagger_sample_bn_false': True, 
   'logdir': 'output/cmp.lmap_Msc.clip5.sbpd_d_r2r_/train', 
-  'rng_data': [<mtrand.RandomState object at 0x7f95d5de3be0>, <mtrand.RandomState object at 0x7f95d5de32d0>], 
-  'rng_action': <mtrand.RandomState object at 0x7f95d5de3500>}
   '''
   m          = train_step_kwargs['m']
-  
   obj        = train_step_kwargs['obj']  
-  #mhr: now it is CarlaEnvWrapper()
-  #mhr: obj is the environment R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
-  #obj_c      = CarlaEnvWrapper()
-
   rng_data   = train_step_kwargs['rng_data']  #mhr: [np.random.RandomState(rng_seed), np.random.RandomState(rng_seed)]
   rng_action = train_step_kwargs['rng_action'] #mhr: np.random.RandomState(rng_seed)
   writer     = train_step_kwargs['writer'] 
-  iters      = train_step_kwargs['iters']    #mhr: 1
   num_steps  = train_step_kwargs['num_steps'] #mhr: 40 -> 80
   logdir     = train_step_kwargs['logdir']
   dagger_sample_bn_false = train_step_kwargs['dagger_sample_bn_false']   #mhr: True
@@ -370,525 +390,144 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
     m.train_ops['outputs'] = []
 
   s_ops = m.summary_ops[mode]
-  val_additional_ops = []
-
-  # Print all variables here.
-  if False:
-    v = tf.get_collection(tf.GraphKeys.VARIABLES)
-    v_op = [_.value() for _ in v]
-    v_op_value = sess.run(v_op)
-
-    filter = lambda x, y: 'Adam' in x.name
-    # filter = lambda x, y: np.is_any_nan(y)
-    ind = [i for i, (_, __) in enumerate(zip(v, v_op_value)) if filter(_, __)]
-    v = [v[i] for i in ind]
-    v_op_value = [v_op_value[i] for i in ind]
-
-    for i in range(len(v)): 
-      logging.info('XXXX: variable: %30s, is_any_nan: %5s, norm: %f.',
-                   v[i].name, np.any(np.isnan(v_op_value[i])),
-                   np.linalg.norm(v_op_value[i]))
-  
+  val_additional_ops = []  
   tt = utils.Timer()
+  tt.tic()
+  print ('get instance')
+  e = obj.sample_env(rng_data)
 
+
+  # mhr: collect data
+  state_features = []
+  state_targets = []
+  net_state_to_input = []
+  step_data_cache = []
+
+  n_step = sess.run(global_step)
   
-
-  for i in range(iters):
-    tt.tic()
-    # Sample a room.
-    # !!!mhr
-    print ('get instance')
-    e = obj.sample_env(rng_data)
-    #driver = obj_c.get_instance()
-    print ('got instance of driver')
-
-
-    # Initialize the agent.
-    init_env_state = e.reset(rng_data)
-    print ('finish reset')
-    print (init_env_state)
-    
-    #init_env_state_c = driver.start()
-
-    # Get and process the common data.
-    input = e.get_common_data() #finish
-    #input = e.pre_common_data(input) #mhr: useless 
-    print ("---------------common_data-----------------")
-    #print(input)
-    feed_dict  = prepare_feed_dict(m.input_tensors['common'], input)
+  #prefix_logdir = 'trainlog/'+logdir[-8:-6]+"/logfiles/"
+  #if not os.path.exists(prefix_logdir+str(n_step)):
+  #  os.makedirs(prefix_logdir+str(n_step))
+    #outputfile = open(logdir+"/logfiles/"+str(n_step)+".pkl", "w")
+  #output_file = open(prefix_logdir+str(n_step)+"/output.txt", "w")
+  #output_file.write("Goals")
+  #output_file.write(str(input['goal_loc']))
+  #output_file.write("Steps")
+  for j in range(num_steps):
+    print ('---------------------------num_step: {:d}---------------------------'.format(j))
+    f = e.get_features()
+    state_features.append(f)
+    feed_dict = prepare_feed_dict(m.input_tensors['step'], state_features[-1])
+    optimal_action = e.get_optimal_action()
     if dagger_sample_bn_false:
       feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-    #print ("---------------common_data-----------------")
-    #print(input)
-
-
-    #print ('success!')
-    #output = open('tmp_files/common_data.txt','w')
-    #output.write(input)
-    #output.close()
-
-    #common_data:...
-    common_data = sess.run(m.train_ops['common'], feed_dict=feed_dict)
-
-    # mhr: collect data
-    states = []
-    state_features = []
-    state_targets = []
-    net_state_to_input = []
-    step_data_cache = []
-    executed_actions = []
-    rewards = []
-    action_sample_wts = []
-    states.append(init_env_state)
-
-    net_state = sess.run(m.train_ops['init_state'], feed_dict=feed_dict)
-    #mhr: What did init_state do? all are zeros.
-    net_state = dict(zip(m.train_ops['state_names'], net_state))
-
-    print ("---------------net_state-----------------")
-    #print(net_state)
-
-
-    net_state_to_input.append(net_state)
-    #prefix_logdir = 'trainlog/'+logdir[-8:-6]+"/logfiles/"
-    n_step = sess.run(global_step)
-    #if not os.path.exists(prefix_logdir+str(n_step)):
-    #  os.makedirs(prefix_logdir+str(n_step))
-      #outputfile = open(logdir+"/logfiles/"+str(n_step)+".pkl", "w")
-    #output_file = open(prefix_logdir+str(n_step)+"/output.txt", "w")
-    #output_file.write("Goals")
-    #output_file.write(str(input['goal_loc']))
-    #output_file.write("Steps")
-    for j in range(num_steps):
-      #rec = {}
-      print ('num_step: {:d}'.format(j))
-      f, ori = e.get_features(states[j], j)
-      
-      print ("----------------------------------f----------------------------------")
-      #print(f)
-      f.update(net_state)
-      f['step_number'] = np.ones((1,1,1), dtype=np.int32)*j
-      state_features.append(f)
-
-      feed_dict = prepare_feed_dict(m.input_tensors['step'], state_features[-1])
-      optimal_action = e.get_optimal_action(states[j], j)
-      for x, v in zip(m.train_ops['common'], common_data):
-        feed_dict[x] = v
-      if dagger_sample_bn_false:
-        feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-      print ("----------------feed_dict-----------------")
-      #print (feed_dict)
-      outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
-                       m.train_ops['step_data_cache'],
-                       m.train_ops['updated_state'],
-                       m.train_ops['outputs']] , feed_dict=feed_dict)
-      '''m.ego_map_ops, m.coverage_ops,'''
-      ''', m.value_ops[0], m.value_ops[1],
-                       m.value_ops[2], m.fr_ops[0], m.fr_ops[1], m.fr_ops[2]'''
-      action_probs = outs[0]
-      sample_gt_prob = outs[1]
-      step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
-      net_state = outs[3]
-      #rec['space']=outs[3].tolist()
-      #rec['action_probs']=outs[0].tolist()
-      print ("----------------outs-----------------")
-      print action_probs
-      #print (outs[5])
-
-      
-      #mhr:useless?
-      if hasattr(e, 'update_state'):
-        outputs = outs[4]
-        outputs = dict(zip(m.train_ops['output_names'], outputs))
-        e.update_state(outputs, j)
-
-      state_targets.append(e.get_targets(states[j], j))
-
-      if j < num_steps-1:
-        # Sample from action_probs and optimal action.
-        action, action_sample_wt = sample_action(
-            rng_action, action_probs, optimal_action, sample_gt_prob,
-            m.sample_action_type, m.sample_action_combine_type)
-        next_state, reward = e.take_action(states[j], action, j)
-
-        print ("----------------action, action_sample_wt, next_state, reward-----------------")
-        print action, action_sample_wt, reward
-
-        executed_actions.append(action)
-        states.append(next_state)
-        rewards.append(reward)
-        action_sample_wts.append(action_sample_wt)
-        net_state = dict(zip(m.train_ops['state_names'], net_state))
-        net_state_to_input.append(net_state)
-        print ("----------------net_state_below-----------------")
-        #print net_state
-    #output_file.close()
+    outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
+                      m.train_ops['step_data_cache'],
+                      m.train_ops['updated_state']] , feed_dict=feed_dict)
+    action_probs = outs[0]
+    sample_gt_prob = outs[1]
+    step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
+    net_state = outs[3][0]
+    print ("----------------outs-----------------")
+    print action_probs
+    state_targets.append(e.get_targets())
     
-    #e.sample_env
-    # Concatenate things together for training.
-    rewards = np.array(rewards).T
-    action_sample_wts = np.array(action_sample_wts).T
-    executed_actions = np.array(executed_actions).transpose((1,0,2)) #.T
-    all_state_targets = concat_state_x(state_targets, e.get_targets_name())
-    all_state_features = concat_state_x(state_features,
-                                        e.get_features_name()+['step_number'])
-    # all_state_net = concat_state_x(net_state_to_input,
-    # m.train_ops['state_names'])
-    #print()
-    all_step_data_cache = concat_state_x(step_data_cache,
-                                         m.train_ops['step_data_cache'])
-
-    dict_train = dict(input)
-    dict_train.update(all_state_features)
-    dict_train.update(all_state_targets)
-    # dict_train.update(all_state_net)
-    dict_train.update(net_state_to_input[0])
-    dict_train.update(all_step_data_cache)
-    dict_train.update({'rewards': rewards, 
-                       'action_sample_wts': action_sample_wts,
-                       'executed_actions': executed_actions})
+    action, action_sample_wt = sample_action(
+        rng_action, action_probs, optimal_action, sample_gt_prob,
+        m.sample_action_type, m.sample_action_combine_type)
+    e.take_action(action, net_state)
+    print ("----------------optimal, action, action_sample_wt, next_state, reward-----------------")
+    print optimal_action
+    print action, action_sample_wt
     
-    #print dict_train
-    feed_dict = prepare_feed_dict(m.input_tensors['train'], dict_train)
-    #print feed_dict[m.input_tensors['train']['action']]
-    #print feed_dict['rewards']
+  # Concatenate things together for training.
 
-    for x in m.train_ops['step_data_cache']:
-      feed_dict[x] = all_step_data_cache[x]
+  all_state_targets = concat_state_w(state_targets, e.get_targets_name())
+  all_state_features = concat_state_w(state_features,
+                                      e.get_features_name())
+  all_step_data_cache = concat_state_w(step_data_cache,
+                                        m.train_ops['step_data_cache'])
 
-    # mhr: Train the model
-    
-    if mode == 'train':
-      #n_step = sess.run(global_step)
-      
-      #feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-      #outss = sess.run([m.train_ops['step'],m.action_logits_op_pre], feed_dict=feed_dict)
-      #print outss
+  dict_train = dict({})
+  dict_train.update(all_state_features)
+  dict_train.update(all_state_targets)
+  dict_train.update(all_step_data_cache)
 
-      feed_dict[m.train_ops['batch_norm_is_training_op']] = True
-      #outss = sess.run([m.train_ops['step']], feed_dict=feed_dict)
-      
+  feed_dict = prepare_feed_dict(m.input_tensors['train'], dict_train)
 
-      if np.mod(n_step, train_display_interval) == 0:
-        total_loss, np_global_step, summary, print_summary = sess.run(
-            [train_op, global_step, s_ops.summary_ops, s_ops.print_summary_ops],
-            feed_dict=feed_dict)
-        logging.error("")
-      else:
-        total_loss, np_global_step, summary = sess.run(
-            [train_op, global_step, s_ops.summary_ops], feed_dict=feed_dict)
+  for x in m.train_ops['step_data_cache']:
+    feed_dict[x] = all_step_data_cache[x]
 
-      if writer is not None and summary is not None:
-        writer.add_summary(summary, np_global_step)
+  # mhr: Train the model
+  
+  if mode == 'train':
+    feed_dict[m.train_ops['batch_norm_is_training_op']] = True
+    if np.mod(n_step, train_display_interval) == 0:
+      total_loss, np_global_step, summary, print_summary = sess.run(
+          [train_op, global_step, s_ops.summary_ops, s_ops.print_summary_ops],
+          feed_dict=feed_dict)
+      logging.error("")
+    else:
+      total_loss, np_global_step, summary = sess.run(
+          [train_op, global_step, s_ops.summary_ops], feed_dict=feed_dict)
 
-      should_stop = sess.run(m.should_stop_op)
-
-    if mode != 'train':
-      arop = [[] for j in range(len(s_ops.additional_return_ops))]
-      for j in range(len(s_ops.additional_return_ops)):
-        if s_ops.arop_summary_iters[j] < 0 or i < s_ops.arop_summary_iters[j]:
-          arop[j] = s_ops.additional_return_ops[j]
-      val = sess.run(arop, feed_dict=feed_dict)
-      val_additional_ops.append(val)
-      tt.toc(log_at=60, log_str='val timer {:d} / {:d}: '.format(i, iters), 
-             type='time')
-
-  if mode != 'train':
-    # Write the default val summaries.
-    summary, print_summary, np_global_step = sess.run(
-        [s_ops.summary_ops, s_ops.print_summary_ops, global_step]) 
     if writer is not None and summary is not None:
       writer.add_summary(summary, np_global_step)
-
-    # write custom validation ops
-    val_summarys = []
-    val_additional_ops = zip(*val_additional_ops)
-    if len(s_ops.arop_eval_fns) > 0:
-      val_metric_summary = tf.summary.Summary()
-      for i in range(len(s_ops.arop_eval_fns)):
-        val_summary = None
-        if s_ops.arop_eval_fns[i] is not None:
-          val_summary = s_ops.arop_eval_fns[i](val_additional_ops[i],
-                                               np_global_step, logdir,
-                                               val_metric_summary,
-                                               s_ops.arop_summary_iters[i])
-        val_summarys.append(val_summary)
-      if writer is not None:
-        writer.add_summary(val_metric_summary, np_global_step)
-
-    # Return the additional val_ops
-    total_loss = (val_additional_ops, val_summarys)
-    should_stop = None
-  
+    should_stop = sess.run(m.should_stop_op)
   return total_loss, should_stop
 
 def test_step_custom_online_sampling(sess, train_op, global_step,
-                                      train_step_kwargs, mode='train'):
+                                      train_step_kwargs, mode):
 
-
-
-  '''{'obj': <datasets.nav_env.BuildingMultiplexer instance at 0x7f96120f0128>, 
-  'train_display_interval': 1, 
-  'iters': 1, 
-  'writer': <tensorflow.python.summary.writer.writer.FileWriter object at 0x7f95d82dc3d0>, 
-  'm': <src.utils.Foo object at 0x7f962484df90>, 
-  'num_steps': 40, 
-  'dagger_sample_bn_false': True, 
-  'logdir': 'output/cmp.lmap_Msc.clip5.sbpd_d_r2r_/train', 
-  'rng_data': [<mtrand.RandomState object at 0x7f95d5de3be0>, <mtrand.RandomState object at 0x7f95d5de32d0>], 
-  'rng_action': <mtrand.RandomState object at 0x7f95d5de3500>}
-  '''
   m          = train_step_kwargs['m']
-  
   obj        = train_step_kwargs['obj']  
-  #mhr: now it is CarlaEnvWrapper()
-  #mhr: obj is the environment R = lambda: nav_env.get_multiplexer_class(args.navtask, args.solver.task)
-  #obj_c      = CarlaEnvWrapper()
-
   rng_data   = train_step_kwargs['rng_data']  #mhr: [np.random.RandomState(rng_seed), np.random.RandomState(rng_seed)]
   rng_action = train_step_kwargs['rng_action'] #mhr: np.random.RandomState(rng_seed)
   writer     = train_step_kwargs['writer'] 
-  iters      = 50 #train_step_kwargs['iters']    #mhr: 1
   num_steps  = train_step_kwargs['num_steps'] #mhr: 40 -> 80
   logdir     = train_step_kwargs['logdir']
   dagger_sample_bn_false = train_step_kwargs['dagger_sample_bn_false']   #mhr: True
   train_display_interval = train_step_kwargs['train_display_interval']  #mhr: 1
+
+  iters = 50
+  iter_id = 0
+
   if 'outputs' not in m.train_ops:
     m.train_ops['outputs'] = []
 
   s_ops = m.summary_ops[mode]
-  val_additional_ops = []
-
-  
-  tt = utils.Timer()
-
-  reach_goal_num = 0
-  goal_dis_sum = 0.0
-
-  for i in range(iters):
-    tt.tic()
-    reach_goal = 0
-    dist_to_goal = 20000.0
-    # Sample a room.
-    print ('get instance')
-    e = obj.sample_env(rng_data)
-    #driver = obj_c.get_instance()
-    print ('got instance of driver')
+  val_additional_ops = []  
+  print ('get instance')
+  e = obj.sample_env(rng_data)
 
 
-    # Initialize the agent.
-    init_env_state = e.reset(rng_data)
-    print ('finish reset')
-    print (init_env_state)
-    
-    # Get and process the common data.
-    input = e.get_common_data() #finish
-    #input = e.pre_common_data(input) #mhr: useless 
-    print ("---------------common_data-----------------")
-    #print(input)
-    feed_dict  = prepare_feed_dict(m.input_tensors['common'], input)
+  n_step = sess.run(global_step)
+  j = 0
+
+  while iter_id < iters:
+    print ('---------------------------iter: {:d}---------------------------'.format(iter_id))
+    print ('---------------------------num_step: {:d}---------------------------'.format(j))
+    f = e.get_features()
+    print(f['command'])
+    feed_dict = prepare_feed_dict(m.input_tensors['step'], f)
+    optimal_action = e.get_optimal_action()
     if dagger_sample_bn_false:
       feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-
-    common_data = sess.run(m.train_ops['common'], feed_dict=feed_dict)
-
-    # mhr: collect data
-    states = []
-    state_features = []
-    state_targets = []
-    net_state_to_input = []
-    step_data_cache = []
-    executed_actions = []
-    rewards = []
-    action_sample_wts = []
-    states.append(init_env_state)
-
-    net_state = sess.run(m.train_ops['init_state'], feed_dict=feed_dict)
-    #mhr: What did init_state do? all are zeros.
-    net_state = dict(zip(m.train_ops['state_names'], net_state))
-
-    print ("---------------net_state-----------------")
-    #print(net_state)
-
-
-    net_state_to_input.append(net_state)
-
-    n_step = sess.run(global_step)
-    prefix_logdir = 'testlog/'+logdir[-16:-14]+"/"+str(i)
-    if not os.path.exists(prefix_logdir):
-      os.makedirs(prefix_logdir)
-      #outputfile = open(logdir+"/logfiles/"+str(n_step)+".pkl", "w")
-    output_file = open(prefix_logdir+"/output.txt", "w")
-    output_file.write("Goals")
-    output_file.write(str(input['goal_loc']))
-    goal_loc = input['goal_loc'][0][0]
-    output_file.write("Steps")
-    for j in range(num_steps):
-      #rec = {}
-      print ('num_step: {:d}'.format(j))
-      f, ori = e.get_features(states[j], j)
-      current_loc = f['loc_on_map'][0][0]
-      goal_img_0_pre = np.sum(f['ego_goal_imgs_0'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
-      goal_img_0 = np.concatenate((goal_img_0_pre, goal_img_0_pre, goal_img_0_pre), 2)
-      goal_img_1_pre = np.sum(f['ego_goal_imgs_1'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
-      goal_img_1 = np.concatenate((goal_img_1_pre, goal_img_1_pre, goal_img_1_pre), 2)
-      goal_img_2_pre = np.sum(f['ego_goal_imgs_2'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
-      goal_img_2 = np.concatenate((goal_img_2_pre, goal_img_2_pre, goal_img_2_pre), 2)
-      Image.fromarray(np.uint8(goal_img_0)).save(prefix_logdir+"/"+str(j)+"_goal_img_0.jpg")
-      Image.fromarray(np.uint8(goal_img_1)).save(prefix_logdir+"/"+str(j)+"_goal_img_1.jpg")
-      Image.fromarray(np.uint8(goal_img_2)).save(prefix_logdir+"/"+str(j)+"_goal_img_2.jpg")
-      
-      sum_num_0 = net_state['running_sum_num_0'][0, 0, :, :, :3] + 128.0
-      sum_num_1 = net_state['running_sum_num_1'][0, 0, :, :, :3] + 128.0
-      sum_num_2 = net_state['running_sum_num_2'][0, 0, :, :, :3] + 128.0
-
-      Image.fromarray(np.uint8(sum_num_0)).save(prefix_logdir+"/"+str(j)+"_sum_num_0.jpg")
-      Image.fromarray(np.uint8(sum_num_1)).save(prefix_logdir+"/"+str(j)+"_sum_num_1.jpg")
-      Image.fromarray(np.uint8(sum_num_2)).save(prefix_logdir+"/"+str(j)+"_sum_num_2.jpg")
-      output_file.write(str(f['loc_on_map']))
-      output_file.write(str(f['incremental_locs']))
-      output_file.write(str(f['incremental_thetas']))
-      #f = e.pre_features(f)
-      print ("----------------------------------f----------------------------------")
-      #print(f)
-      f.update(net_state)
-      f['step_number'] = np.ones((1,1,1), dtype=np.int32)*j
-      state_features.append(f)
-
-      feed_dict = prepare_feed_dict(m.input_tensors['step'], state_features[-1])
-      optimal_action = e.get_optimal_action(states[j], j)
-      for x, v in zip(m.train_ops['common'], common_data):
-        feed_dict[x] = v
-      if dagger_sample_bn_false:
-        feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-      print ("----------------feed_dict-----------------")
-      #print (feed_dict)
-      outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
-                       m.train_ops['step_data_cache'],
-                       m.train_ops['updated_state'],
-                       m.train_ops['outputs'],  m.action_logits_op_pre, m.value_ops[0], m.value_ops[1],
-                       m.value_ops[2], m.fr_ops[0], m.fr_ops[1], m.fr_ops[2]] , feed_dict=feed_dict)
-      '''m.ego_map_ops, m.coverage_ops,'''
-      action_probs = outs[0]
-      sample_gt_prob = outs[1]
-      step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
-      net_state = outs[3]
-      #rec['space']=outs[3].tolist()
-      #rec['action_probs']=outs[0].tolist()
-      print ("----------------outs-----------------")
-      print action_probs
-      print (outs[5])
-
-      fr_0_pre = np.amax(outs[9][0,  :, :, :], 2)[:,:,np.newaxis]*50.0
-      fr_0 = np.concatenate((fr_0_pre, fr_0_pre, fr_0_pre), 2)
-      fr_1_pre = np.amax(outs[10][0,  :, :, :], 2)[:,:,np.newaxis]*50.0
-      fr_1 = np.concatenate((fr_1_pre, fr_1_pre, fr_1_pre), 2)
-      fr_2_pre = np.amax(outs[11][0,  :, :, :], 2)[:,:,np.newaxis]*50.0
-      fr_2 = np.concatenate((fr_2_pre, fr_2_pre, fr_2_pre), 2)
-
-      Image.fromarray(np.uint8(fr_0)).save(prefix_logdir+"/"+str(j)+"_fr_0.jpg")
-      Image.fromarray(np.uint8(fr_1)).save(prefix_logdir+"/"+str(j)+"_fr_1.jpg")
-      Image.fromarray(np.uint8(fr_2)).save(prefix_logdir+"/"+str(j)+"_fr_2.jpg")
-      
-
-      vin_0 = outs[6][0,  :, :, :] * 20.0
-      vin_1 = outs[7][0,  :, :, :] * 20.0
-      vin_2 = outs[8][0,  :, :, :] * 20.0
-
-      Image.fromarray(np.uint8(vin_0)).save(prefix_logdir+"/"+str(j)+"_vin_0.jpg")
-      Image.fromarray(np.uint8(vin_1)).save(prefix_logdir+"/"+str(j)+"_vin_1.jpg")
-      Image.fromarray(np.uint8(vin_2)).save(prefix_logdir+"/"+str(j)+"_vin_2.jpg")
-      
-      #print (outs[6])
-      # outs
-      #fpkl.append(rec)
-      #mhr:useless?
-      if hasattr(e, 'update_state'):
-        outputs = outs[4]
-        outputs = dict(zip(m.train_ops['output_names'], outputs))
-        e.update_state(outputs, j)
-
-      state_targets.append(e.get_targets(states[j], j))
-      #print ("----------------state_targets-----------------")
-      #print(state_targets[-1])
-
-      if j < num_steps-1:
-        # Sample from action_probs and optimal action.
-        action, action_sample_wt = sample_action(
-            rng_action, action_probs, optimal_action, sample_gt_prob,
-            m.sample_action_type, m.sample_action_combine_type)
-        next_state, reward = e.take_action(states[j], action, j)
-        if reward[0] > 0:
-          reach_goal = 1
-          break
-
-        print ("----------------action, action_sample_wt, next_state, reward-----------------")
-        print action, action_sample_wt, reward
-
-        executed_actions.append(action)
-        states.append(next_state)
-        rewards.append(reward)
-        action_sample_wts.append(action_sample_wt)
-        net_state = dict(zip(m.train_ops['state_names'], net_state))
-        net_state_to_input.append(net_state)
-        print ("----------------net_state_below-----------------")
-        #print net_state
-      
-    
-    output_file.close()
-    reach_goal_num += reach_goal
-    if not reach_goal:
-      #loc_on_map = e.get_features()
-      goal_dis_sum += np.sqrt((goal_loc[0]-current_loc[0])**2 + (goal_loc[1]-current_loc[1])**2)
-      goal_loc = input['goal_loc'][0]  
-
-    
-    '''arop = [[] for j in range(len(s_ops.additional_return_ops))]
-    for j in range(len(s_ops.additional_return_ops)):
-      if s_ops.arop_summary_iters[j] < 0 or i < s_ops.arop_summary_iters[j]:
-        arop[j] = s_ops.additional_return_ops[j]
-    val = sess.run(arop, feed_dict=feed_dict)
-    val_additional_ops.append(val)'''
-    tt.toc(log_at=60, log_str='val timer {:d} / {:d}: '.format(i, iters), 
-            type='time')
-
-    print("average dist to goal:")
-    print(goal_dis_sum/(i+1))
-    print("average success:")
-    print(reach_goal_num*1.0/(i+1))
-
-  '''if mode != 'train':
-    # Write the default val summaries.
-    summary, print_summary, np_global_step = sess.run(
-        [s_ops.summary_ops, s_ops.print_summary_ops, global_step]) 
-    if writer is not None and summary is not None:
-      writer.add_summary(summary, np_global_step)
-
-    # write custom validation ops
-    val_summarys = []
-    val_additional_ops = zip(*val_additional_ops)
-    if len(s_ops.arop_eval_fns) > 0:
-      val_metric_summary = tf.summary.Summary()
-      for i in range(len(s_ops.arop_eval_fns)):
-        val_summary = None
-        if s_ops.arop_eval_fns[i] is not None:
-          val_summary = s_ops.arop_eval_fns[i](val_additional_ops[i],
-                                               np_global_step, logdir,
-                                               val_metric_summary,
-                                               s_ops.arop_summary_iters[i])
-        val_summarys.append(val_summary)
-      if writer is not None:
-        writer.add_summary(val_metric_summary, np_global_step)
-
-    # Return the additional val_ops
-    total_loss = (val_additional_ops, val_summarys)
-    should_stop = None
-  
-  return total_loss, should_stop'''
-  print("average dist to goal:")
-  print(goal_dis_sum/iters)
-  print("average success:")
-  print(reach_goal_num*1.0/iters)
+    outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
+                      m.train_ops['step_data_cache'],
+                      m.train_ops['updated_state']] , feed_dict=feed_dict)
+    action_probs = outs[0]
+    sample_gt_prob = outs[1]
+    net_state = outs[3][0]
+    print ("----------------outs-----------------")
+    print action_probs
+    action, action_sample_wt = sample_action(
+        rng_action, action_probs, optimal_action, sample_gt_prob,
+        m.sample_action_type, m.sample_action_combine_type)
+    rst = e.take_action(action, net_state)
+    if rst[0]:
+      iter_id += 1
+    j+=1
 
 def train_step_custom_v2(sess, train_op, global_step, train_step_kwargs,
                          mode='train'):
@@ -1252,19 +891,40 @@ def simple_summaries(summarize_ops, summarize_names, mode, to_aggregate=False,
 
 
 
+'''
+  # Print all variables here.
+  if False:
+    v = tf.get_collection(tf.GraphKeys.VARIABLES)
+    v_op = [_.value() for _ in v]
+    v_op_value = sess.run(v_op)
+
+    filter = lambda x, y: 'Adam' in x.name
+    # filter = lambda x, y: np.is_any_nan(y)
+    ind = [i for i, (_, __) in enumerate(zip(v, v_op_value)) if filter(_, __)]
+    v = [v[i] for i in ind]
+    v_op_value = [v_op_value[i] for i in ind]
+
+    for i in range(len(v)): 
+      logging.info('XXXX: variable: %30s, is_any_nan: %5s, norm: %f.',
+                   v[i].name, np.any(np.isnan(v_op_value[i])),
+                   np.linalg.norm(v_op_value[i]))
+
+
+  goal_img_0_pre = np.sum(f['ego_goal_imgs_0'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
+    goal_img_0 = np.concatenate((goal_img_0_pre, goal_img_0_pre, goal_img_0_pre), 2)
+    goal_img_1_pre = np.sum(f['ego_goal_imgs_1'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
+    goal_img_1 = np.concatenate((goal_img_1_pre, goal_img_1_pre, goal_img_1_pre), 2)
+    goal_img_2_pre = np.sum(f['ego_goal_imgs_2'][0, 0,:, :, :], 2)[:,:,np.newaxis]*255.0
+    goal_img_2 = np.concatenate((goal_img_2_pre, goal_img_2_pre, goal_img_2_pre), 2)
+    Image.fromarray(np.uint8(goal_img_0)).save(prefix_logdir+"/"+str(j)+"_goal_img_0.jpg")
+    Image.fromarray(np.uint8(goal_img_1)).save(prefix_logdir+"/"+str(j)+"_goal_img_1.jpg")
+    Image.fromarray(np.uint8(goal_img_2)).save(prefix_logdir+"/"+str(j)+"_goal_img_2.jpg")
     
-'''for o_map_array in input['orig_maps']:
-  print ('len(o_map_array)')
-  print (len(o_map_array))
-  o_map = o_map_array[0]
-  print ('len(o_map)')
-  print (len(o_map))
-  for line in o_map:
-    print ('len(line)')
-    print (len(line))
-    for e in line:
-      if(len(e)!=1 or e[0]!=0):
-        print ('len(e)')
-        print (len(e))
-        print (e[0])
-        logging.fatal('Wrong, not 0!')'''
+    sum_num_0 = net_state['running_sum_num_0'][0, 0, :, :, :3] + 128.0
+    sum_num_1 = net_state['running_sum_num_1'][0, 0, :, :, :3] + 128.0
+    sum_num_2 = net_state['running_sum_num_2'][0, 0, :, :, :3] + 128.0
+
+    Image.fromarray(np.uint8(sum_num_0)).save(prefix_logdir+"/"+str(j)+"_sum_num_0.jpg")
+    Image.fromarray(np.uint8(sum_num_1)).save(prefix_logdir+"/"+str(j)+"_sum_num_1.jpg")
+    Image.fromarray(np.uint8(sum_num_2)).save(prefix_logdir+"/"+str(j)+"_sum_num_2.jpg")
+'''

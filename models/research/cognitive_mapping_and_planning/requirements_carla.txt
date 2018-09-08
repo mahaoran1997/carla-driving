@@ -11,4 +11,3 @@ scipy
 scikit-image
 opencv-python
 pid_controller
-pickle

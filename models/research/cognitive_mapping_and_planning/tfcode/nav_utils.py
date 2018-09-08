@@ -45,9 +45,6 @@ def compute_losses_multi_or(logits_vec, actions, commands, weights=None,
 
     if weights is None:
       weights = tf.ones_like(actions, dtype=tf.float32, name='weight')   
-    actions = tf.cast(tf.reshape(actions, [-1, num_actions], 're_actions_one_hot'), tf.float32)
-    commands = tf.reshape(commands, [-1, len(logits_vec)], 're_command')
-    weights = tf.reshape(weights, [-1, num_actions], 're_weight')
     weights_sum = tf.reduce_sum(weights, reduction_indices=1)
     total = tf.reduce_sum(weights_sum)
 
@@ -60,45 +57,31 @@ def compute_losses_multi_or(logits_vec, actions, commands, weights=None,
       action_commands_vec.append(tf.stack([commands, commands, commands], 1))
 
     for logits in logits_vec:
-
-      with tf.name_scope('loss_'+str(vec_id)):
-
-        example_loss = tf.reduce_sum(weights * tf.square(logits - actions), 1)
-        branch_loss = example_loss * commands_vec[vec_id]
-        tmp_data_loss_op = tf.reduce_sum(branch_loss * weights_sum)
-        
-        is_correct = tf.cast(tf.less(example_loss, 0.01, name='pred_class'),  tf.float32) 
-        branch_acc = is_correct * commands_vec[vec_id]
-        tmp_acc_op = tf.reduce_sum(branch_acc * weights_sum)
-
+      with tf.name_scope('action_'+str(vec_id)):
         tmp_action = action_commands_vec[vec_id] * logits
-
       if vec_id == 0:
-        data_loss_op = tmp_data_loss_op
-        acc_op = tmp_acc_op
         actions_op = tmp_action
       else:
-        data_loss_op = tf.add(tmp_data_loss_op, data_loss_op)
-        acc_op = tf.add(tmp_acc_op, acc_op)
         actions_op = tf.add(tmp_action, actions_op)
       vec_id += 1
-    
-    data_loss_op = data_loss_op/total
-    acc_op = acc_op/total
 
-    if reg_loss_op is None:
+    with tf.name_scope('loss'):
+      example_loss = tf.reduce_sum(weights * tf.square(actions_op - actions), 1)
+      data_loss_op = tf.reduce_sum(example_loss * weights_sum)/total
+      is_correct = tf.cast(tf.less(example_loss, 0.01, name='pred_class'),  tf.float32) 
+      acc_op = tf.reduce_sum(is_correct * weights_sum) / total
+      if reg_loss_op is None:
+        if reg_loss_wt > 0:
+          reg_loss_op = tf.add_n(tf.losses.get_regularization_losses())
+        else:
+          reg_loss_op = tf.constant(0.)
       if reg_loss_wt > 0:
-        reg_loss_op = tf.add_n(tf.losses.get_regularization_losses())
+        total_loss_op = data_loss_wt*data_loss_op + reg_loss_wt*reg_loss_op 
       else:
-        reg_loss_op = tf.constant(0.)
-    if reg_loss_wt > 0:
-      total_loss_op = data_loss_wt*data_loss_op + reg_loss_wt*reg_loss_op 
-    else:
-      total_loss_op = data_loss_wt*data_loss_op
-    ewma_acc_op = moving_averages.weighted_moving_average(
-      acc_op, ewma_decay, weight=total, name='ewma_acc')
-    acc_ops = [ewma_acc_op]
-
+        total_loss_op = data_loss_wt*data_loss_op
+      ewma_acc_op = moving_averages.weighted_moving_average(
+        acc_op, ewma_decay, weight=total, name='ewma_acc')
+      acc_ops = [ewma_acc_op]
   return reg_loss_op, data_loss_op, total_loss_op, acc_ops, actions_op
 
 
@@ -107,7 +90,7 @@ def get_repr_from_image(images_reshaped, modalities, data_augment, encoder,
   # Pass image through lots of convolutional layers, to obtain pool5
   if modalities == ['rgb']:
     with tf.name_scope('pre_rgb'):
-      x = (images_reshaped + 128.) / 255. # Convert to brightness between 0 and 1.
+      x = (images_reshaped*1.0) / 255. # Convert to brightness between 0 and 1.
       if data_augment.relight and is_training:
         x = tf_utils.distort_image(x, fast_mode=data_augment.relight_fast)
       x = (x-0.5)*2.0
@@ -121,6 +104,7 @@ def get_repr_from_image(images_reshaped, modalities, data_augment, encoder,
       x = d_image
     scope_name = 'd_'+encoder
 
+  print(x.get_shape().as_list())
   resnet_is_training = is_training and (not freeze_conv)
   with slim.arg_scope(resnet_v2.resnet_utils.resnet_arg_scope(resnet_is_training)):
     fn = getattr(tf_utils, encoder)
@@ -439,7 +423,7 @@ def add_default_summaries(mode, arop_full_summary_iters, summarize_ops,
   
   elif mode == 'test':
     arop = s_ops.additional_return_ops
-    arop += [[input_tensors['step']['loc_on_map'],
+    '''arop += [[input_tensors['step']['loc_on_map'],
               input_tensors['common']['goal_loc'],
               input_tensors['step']['gt_dist_to_goal']]]
     arop += [[input_tensors['step']['gt_dist_to_goal']]]
@@ -450,7 +434,7 @@ def add_default_summaries(mode, arop_full_summary_iters, summarize_ops,
               input_tensors['step']['perturbs']]]
     arop += [[input_tensors['step']['loc_on_map'],
               input_tensors['common']['orig_maps'],
-              input_tensors['common']['goal_loc']]]
+              input_tensors['common']['goal_loc']]]'''
     s_ops.arop_summary_iters += [-1, -1, -1, arop_full_summary_iters]
     s_ops.arop_eval_fns += [eval_dist, save_d_at_t, save_all,
                             plot_trajectories]

@@ -68,7 +68,7 @@ def get_default_cmp_args():
       conv_on_value_map=0, fr_neurons=16, fr_ver='v2', fr_inside_neurons=64,
       fr_stride=1, crop_remove_each=30, value_crop_size=4,
       action_sample_type='sample', action_sample_combine_type='one_or_other',
-      sample_gt_prob_type='inverse_sigmoid_decay', dagger_sample_bn_false=True,
+      sample_gt_prob_type='subsection', dagger_sample_bn_false=True,
       vin_num_iters=36, isd_k=750., use_agent_loc=False, multi_scale=True,
       readout_maps=False, rom_arch=readout_maps_arch_args)
 
@@ -170,8 +170,13 @@ def process_arch_learned_map(args, arch_vars):
     args.arch.fr_inside_neurons = 32
 
     args.mapper_arch.pad_map_with_zeros_each = [0 for _ in range(n_scales)]
-    args.mapper_arch.deconv_neurons = [64*n_scales, 32*n_scales, 16*n_scales]
+    args.mapper_arch.deconv_neurons = [128, 64, 32]
     args.mapper_arch.deconv_strides = [2, 2, 2]
+    
+    # mhr:new
+    args.mapper_arch.conv_neurons = 32
+    args.mapper_arch.conv_ks = 5
+    args.mapper_arch.conv_strides = 1
 
     if arch_vars.var2 == 'MscNoVin':
       # No planning version.
@@ -216,7 +221,7 @@ def process_arch_learned_map(args, arch_vars):
     logging.fatal('arch_vars.var2 not one of Msc, MscROMms, MscROMss, MscNoVin.')
     assert(False)
 
-  map_channels = args.mapper_arch.deconv_neurons[-1] / 2
+  map_channels = args.mapper_arch.deconv_neurons[-1]
   args.navtask.task_params.map_channels = map_channels
   
   #mhr: new

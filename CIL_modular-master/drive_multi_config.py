@@ -50,7 +50,7 @@ def process_collect(list_of_configs, port, gpu,
             if count >= 5:
                 count = 0
                 cmd = ['bash', '-c',
-                       " '/scratch/yang/aws_data/carla_0.8.4/CarlaUE4.sh /Game/Maps/%s  -carla-server -benchmark -fps=5 -carla-world-port=%d' " % (TownName, port)]
+                       " '/scratch/haoran/carla/CarlaUE4.sh /Game/Maps/%s  -carla-server -benchmark -fps=5 -world-port=%d -carla-settings=../carla/Example.CarlaSettings.ini' " % (TownName, port)]
                 print(" ".join(cmd))
                 print("before spawnling")
                 t = threading.Thread(target=lambda: os.system(" ".join(cmd)))
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     #available_gpus = [0, 2, 4, 5, 6]
     #num_processes = len(available_gpus) * 2
     available_gpus = [0]
-    num_processes = 8
+    num_processes = 4
 
     list_of_configs = [[] for i in range(num_processes)]
 
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     ps=[]
     for i in range(num_processes):
         p = Process(target=process_collect, args=(list_of_configs[i],
-                                                  2000+i*3,
+                                                  4000+i*3,
                                                   available_gpus[i % len(available_gpus)],
                                                   tag,
                                                   generated_config_cache_path,

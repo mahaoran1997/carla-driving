@@ -5,8 +5,8 @@ class configDrive:
 
         # resource related
         self.host = "127.0.0.1"
-        self.port = 2000
-        self.path = "/scratch/yang/aws_data/carla_collect/noiser_3cam/"  # If path is set go for it , if not expect a name set
+        self.port = 4000
+        self.path = "/scratch/haoran/data/carla_collect/noiser_3cam/"  # If path is set go for it , if not expect a name set
 
         # data collection related
         self.city_name = 'Town01'
@@ -21,8 +21,8 @@ class configDrive:
         self.reset_period = 960 # reset when the system time goes beyond this number
         # Those parameters will override carla_config
         self.weather = "1" # This will be override by the caller
-        self.cars = "50"
-        self.pedestrians = "100"
+        self.cars = "0" #50
+        self.pedestrians = "0" #100
         # TODO: change hash_data_collection
         self.num_images_to_collect = 200*20 # how many images to collect in total
         self.re_entry = True # True to allow continue collecting the data, this will make changes to the folder structure

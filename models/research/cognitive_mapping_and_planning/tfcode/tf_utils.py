@@ -32,7 +32,9 @@ from tensorflow.python.ops import variable_scope
 sys.path.insert(0, '../slim')
 from preprocessing import inception_preprocessing as ip
 
-from datasets.inuse.carla_env import *
+
+from datasets.inuse.training_env import *
+#from datasets.inuse.carla_env import *
 
 
 from PIL import Image
@@ -124,7 +126,7 @@ def step_subsection(k, global_step_op):
 
 def inverse_sigmoid_decay(k, global_step_op):
   with tf.name_scope('inverse_sigmoid_decay'):
-    k = tf.constant(k, dtype=tf.float32) #mhr:!!!! no /10
+    k = tf.constant(k*10, dtype=tf.float32) #mhr:!!!! no /10
     tmp = k*tf.exp(-tf.cast(global_step_op, tf.float32)/k)
     tmp = tmp / (1. + tmp)
   return tmp
@@ -416,29 +418,29 @@ def train_step_custom_online_sampling(sess, train_op, global_step,
   for j in range(num_steps):
     print ('---------------------------num_step: {:d}---------------------------'.format(j))
     f = e.get_features()
+    #print(f['imgs'])
     state_features.append(f)
     feed_dict = prepare_feed_dict(m.input_tensors['step'], state_features[-1])
-    optimal_action = e.get_optimal_action()
+    control = e.get_action()
     if dagger_sample_bn_false:
       feed_dict[m.train_ops['batch_norm_is_training_op']] = False
-    outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
-                      m.train_ops['step_data_cache'],
+    outs = sess.run([m.train_ops['step_data_cache'],
                       m.train_ops['updated_state']] , feed_dict=feed_dict)
-    action_probs = outs[0]
-    sample_gt_prob = outs[1]
-    step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[2])))
-    net_state = outs[3][0]
-    print ("----------------outs-----------------")
-    print action_probs
+    '''outs = sess.run([m.train_ops['step'], m.sample_gt_prob_op,
+                      m.train_ops['step_data_cache'],
+                      m.train_ops['updated_state']] , feed_dict=feed_dict)'''
+
+    step_data_cache.append(dict(zip(m.train_ops['step_data_cache'], outs[0])))
+    net_state = outs[1][0]
+    #print ("----------------outs-----------------")
+    #print action_probs
     state_targets.append(e.get_targets())
     
-    action, action_sample_wt = sample_action(
+    '''action, action_sample_wt = sample_action(
         rng_action, action_probs, optimal_action, sample_gt_prob,
-        m.sample_action_type, m.sample_action_combine_type)
-    e.take_action(action, net_state)
-    print ("----------------optimal, action, action_sample_wt, next_state, reward-----------------")
-    print optimal_action
-    print action, action_sample_wt
+        m.sample_action_type, m.sample_action_combine_type)'''
+    e.take_action(net_state)
+    
     
   # Concatenate things together for training.
 

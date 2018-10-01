@@ -89,7 +89,7 @@ if __name__ == '__main__':
   parser.add_argument('-lg', '--log', help="activate the log file",action="store_true") 
   parser.add_argument('-db', '--debug', help="put the log file to screen",action="store_true") 
   parser.add_argument('-e', '--experiment-name', help="The experiment name (NAME.py file should be in configuration folder, and the results will be saved to models/NAME)", default="")
-  parser.add_argument('-pt','--path', type=str,default="path/", help='Path to Store or read outputs')
+  parser.add_argument('-pt', '--path', type=str,default="path/", help='Path to Store or read outputs')
 
   # Train 
 

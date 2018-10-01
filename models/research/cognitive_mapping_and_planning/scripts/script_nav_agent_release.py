@@ -66,14 +66,15 @@ import src.utils as utils
 import tfcode.cmp as cmp 
 from tfcode import tf_utils
 from tfcode import vision_baseline_lstm
-from datasets.inuse.carla_env import *
+
+from datasets.inuse.training_env import *
 #from datasets.inuse.carla_env import *
 
 
 
 
-'''
-logdir = '57'
+
+'''logdir = '100'
 iter = 0
 rng_data = [np.random.RandomState(0), np.random.RandomState(0)]
 train_step_kwargs={}
@@ -88,7 +89,8 @@ while True:
   state_targets = []
   for i in range(10):
     f = e.get_features()
-    optimal_action = e.get_optimal_action()
+    print(f['imgs'])
+    optimal_action = e.get_action()
     state_targets.append(e.get_targets())
     e.take_action(optimal_action, f['running_sum_num'])'''
 

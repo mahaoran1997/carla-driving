@@ -68,7 +68,7 @@ def get_default_cmp_args():
       conv_on_value_map=0, fr_neurons=16, fr_ver='v2', fr_inside_neurons=64,
       fr_stride=1, crop_remove_each=30, value_crop_size=4,
       action_sample_type='sample', action_sample_combine_type='one_or_other',
-      sample_gt_prob_type='subsection', dagger_sample_bn_false=True,
+      sample_gt_prob_type='inverse_sigmoid_decay', dagger_sample_bn_false=True,
       vin_num_iters=36, isd_k=750., use_agent_loc=False, multi_scale=True,
       readout_maps=False, rom_arch=readout_maps_arch_args)
 

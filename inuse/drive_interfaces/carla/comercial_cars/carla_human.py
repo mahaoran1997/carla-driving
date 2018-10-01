@@ -30,61 +30,7 @@ from driver import *
 import copy
 
 def find_valid_episode_position(positions,waypointer):
-    '''
-    while(True):
-        found_match = False
-        while not found_match:
 
-            #for i in range(len(positions)):
-            #    print ('id {:d}:'.format(i))
-            #    print (positions[i].location.x,  positions[i].location.y )
-
-            index_start = np.random.randint(len(positions))
-            start_pos =positions[index_start]
-            if not waypointer.test_position((start_pos.location.x,start_pos.location.y,22),\
-                (start_pos.orientation.x,start_pos.orientation.y,start_pos.orientation.z)):
-                continue
-
-            index_goals = []
-            for i in range(len(positions)):
-                goals_pos =positions[i]  
-                dis = sldist([start_pos.location.x,start_pos.location.y],[goals_pos.location.x,goals_pos.location.y])
-                if i!=index_start and dis >1000 and dis <= 10000.0:
-                    index_goals.append(i)
-
-            index_goal = index_goals[np.random.randint(len(index_goals))]
-
-            goals_pos =positions[index_goal]  
-            print (' TESTING (',index_start,',',index_goal,')')
-            print ([start_pos.location.x,start_pos.location.y, goals_pos.location.x,goals_pos.location.y])
-            print ([start_pos.orientation.x,start_pos.orientation.y,start_pos.orientation.z])
-            print ([goals_pos.orientation.x,goals_pos.orientation.y,goals_pos.orientation.z])
-            
-            if not waypointer.test_position((goals_pos.location.x,goals_pos.location.y,22),\
-                (goals_pos.orientation.x,goals_pos.orientation.y,goals_pos.orientation.z)):
-                print ('position')
-                continue
-            #if sldist([start_pos.location.x,start_pos.location.y],[goals_pos.location.x,goals_pos.location.y]) < 25000.0:
-            #    print ('COntinued on distance ', sldist([start_pos.location.x,start_pos.location.y],[goals_pos.location.x,goals_pos.location.y]))
-                
-            #    continue
-
-            if waypointer.test_pair((start_pos.location.x,start_pos.location.y,22)\
-                ,(start_pos.orientation.x,start_pos.orientation.y,start_pos.orientation.z),\
-                (goals_pos.location.x,goals_pos.location.y,22)):
-                found_match=True
-            else:
-                print ('pair')
-
-            if (found_match):
-                print ([start_pos.location.x,start_pos.location.y, goals_pos.location.x,goals_pos.location.y])
-                print (sldist([start_pos.location.x,start_pos.location.y],[goals_pos.location.x,goals_pos.location.y]))
-            
-            waypointer.reset()
-        waypointer.reset()
-
-    
-    return index_start,index_goal'''
     
     found_match = False
     while not found_match:
@@ -162,21 +108,6 @@ class CarlaHuman(Driver):
         self.carla =CARLA(self._host,self._port)
 
         self._reset()
-
-
-        if not self._autopilot:
-            pygame.joystick.init()
-
-
-
-        
-            joystick_count = pygame.joystick.get_count()
-            if joystick_count >1:
-                print "Please Connect Just One Joystick"
-                raise 
-
-            self.joystick = pygame.joystick.Joystick(0)
-            self.joystick.init()
 
     def _reset(self):
 
@@ -278,24 +209,18 @@ class CarlaHuman(Driver):
 
     def get_reset(self):
 
-        if self._autopilot:
-            if time.time() - self._start_time > self._reset_period:
+        if time.time() - self._start_time > self._reset_period:
 
-                self._reset()
-            elif self._latest_measurements['PlayerMeasurements'].collision_vehicles > 0.0 \
-            or self._latest_measurements['PlayerMeasurements'].collision_pedestrians > 0.0 or self._latest_measurements['PlayerMeasurements'].collision_other > 0.0:
-
-
-                self._reset()
+            self._reset()
+            return True
+        elif self._latest_measurements['PlayerMeasurements'].collision_vehicles > 0.0 \
+        or self._latest_measurements['PlayerMeasurements'].collision_pedestrians > 0.0 or self._latest_measurements['PlayerMeasurements'].collision_other > 0.0:
 
 
-        else:
-            if( self.joystick.get_button( 4 )):
+            self._reset()
+            return True
 
-
-                self._reset()
-
-
+        return False
 
     def get_noise(self,noise):
         if( self.joystick.get_button( 5 )):
@@ -309,39 +234,9 @@ class CarlaHuman(Driver):
         wp1,wp2=self._agent.get_active_wps()
         return [wp1,wp2]
 
-    def compute_action(self,sensor,speed):
+    def compute_action(self):
 
-
-        """ Get Steering """
-        if not self._autopilot:
-            steering_axis = self.joystick.get_axis(0)
-
-            acc_axis = self.joystick.get_axis(2)
-
-            brake_axis = self.joystick.get_axis(3)
-
-            if( self.joystick.get_button( 3 )):
-
-                self._rear =True
-            if( self.joystick.get_button( 2 )):
-                self._rear=False
-
-
-            control = Control()
-            control.steer = steering_axis
-            control.throttle = -(acc_axis -1)/2.0
-            control.brake = -(brake_axis -1)/2.0
-            if control.brake < 0.001:
-                control.brake = 0.0
-
-
-            control.hand_brake = 0
-            control.reverse = self._rear
-
-
-        else:
-
-            control = self._agent.get_control(self._latest_measurements,self.positions[self.episode_config[1]])
+        control = self._agent.get_control(self._latest_measurements,self.positions[self.episode_config[1]])
 
         return control
 
@@ -349,26 +244,33 @@ class CarlaHuman(Driver):
 
     def get_sensor_data(self,goal_pos=None,goal_ori=None):
 
+        new = False
         measurements= self.carla.getMeasurements()
         self._latest_measurements = measurements
         player_data =measurements['PlayerMeasurements']
         pos = [player_data.transform.location.x,player_data.transform.location.y,22]
         ori = [player_data.transform.orientation.x,player_data.transform.orientation.y,player_data.transform.orientation.z]
         
-        if self.use_planner:
+        
 
-            if sldist([player_data.transform.location.x,player_data.transform.location.y],[self.positions[self.episode_config[1]].location.x,self.positions[self.episode_config[1]].location.y]) < self._dist_to_activate:
+        if sldist([player_data.transform.location.x,player_data.transform.location.y],[self.positions[self.episode_config[1]].location.x,self.positions[self.episode_config[1]].location.y]) < self._dist_to_activate:
 
-                self._reset()
+            self._reset()
+            new = True
+            measurements= self.carla.getMeasurements()
+            self._latest_measurements = measurements
+            player_data =measurements['PlayerMeasurements']
+            pos = [player_data.transform.location.x,player_data.transform.location.y,22]
+            ori = [player_data.transform.orientation.x,player_data.transform.orientation.y,player_data.transform.orientation.z]
+            
 
-            #print 'Selected Position ',self.episode_config[1],'from len ', len(self.positions)
-            direction,_ = self.planner.get_next_command(pos,ori,[self.positions[self.episode_config[1]].location.x,self.positions[self.episode_config[1]].location.y,22],(1,0,0))
-            #print direction
-        else:
-            direction = 2.0
+        #print 'Selected Position ',self.episode_config[1],'from len ', len(self.positions)
+        #print direction
 
 
-        return measurements,direction
+        direction, _ = self.planner.get_next_command(pos,ori,[self.positions[self.episode_config[1]].location.x,self.positions[self.episode_config[1]].location.y,22],(1,0,0))
+        
+        return measurements,direction,new
 
 
     

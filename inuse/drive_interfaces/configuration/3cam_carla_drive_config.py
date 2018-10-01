@@ -7,9 +7,9 @@ class configDrive:
   def __init__(self):
 
     #self.experiment_name =''
-    self.carla_config ="./drive_interfaces/carla_interface/CarlaSettings3CamTest.ini"   # The path to carla ini file # TODO: make this class to be able to generate the ini file
+    self.carla_config = None #"./drive_interfaces/carla_interface/CarlaSettings3CamTest.ini"   # The path to carla ini file # TODO: make this class to be able to generate the ini file
     self.host = "127.0.0.1"
-    self.port = 2000
+    self.port = 4000
     self.path = "../Desktop/" # If path is set go for it , if not expect a name set
     self.resolution = [800,600]
     self.noise = "None" #NON CARLA SETTINGS PARAM
@@ -43,4 +43,3 @@ class configDrive:
     self.weathers =[1]*len(self.episodes_positions)
     self.number_of_cars = [15]*len(self.episodes_positions)
     self.number_of_pedestrians =[50]*len(self.episodes_positions)
-
